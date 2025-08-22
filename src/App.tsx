@@ -7,10 +7,11 @@ function App() {
   const displayCanvasRef = useRef<HTMLCanvasElement>(null);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>('');
-  const [targetWidth, setTargetWidth] = useState<number>(32);
+  const [targetWidth, setTargetWidth] = useState<number>(150);
   const [videoLoaded, setVideoLoaded] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isGrayscale, setIsGrayscale] = useState<boolean>(false);
+  const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const animationFrameRef = useRef<number>();
 
   useEffect(() => {
@@ -117,13 +118,14 @@ function App() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
       
-      // Draw and downscale
+      // Apply filters
       if (isGrayscale) {
         ctx.filter = 'grayscale(100%)';
       } else {
         ctx.filter = 'none';
       }
       
+      // Draw and downscale
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       // Upscale with nearest neighbor
@@ -134,7 +136,7 @@ function App() {
     };
 
     processFrame();
-  }, [targetWidth, videoLoaded, isGrayscale]);
+  }, [targetWidth, videoLoaded, isGrayscale, isFlipped]);
 
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
@@ -187,9 +189,29 @@ function App() {
     if (!displayCanvasRef.current) return;
     
     try {
+      // Create a temporary canvas for the final image
+      const finalCanvas = document.createElement('canvas');
+      const finalCtx = finalCanvas.getContext('2d');
+      if (!finalCtx) return;
+
+      // Set to 1080p resolution
+      finalCanvas.width = 1920;
+      finalCanvas.height = 1080;
+
+      // Apply flip if needed
+      if (isFlipped) {
+        finalCtx.scale(-1, 1);
+        finalCtx.translate(-finalCanvas.width, 0);
+      }
+
+      // Draw the display canvas content with nearest-neighbor scaling
+      finalCtx.imageSmoothingEnabled = false;
+      finalCtx.drawImage(displayCanvasRef.current, 0, 0, finalCanvas.width, finalCanvas.height);
+
+      // Create download link
       const link = document.createElement('a');
       link.download = `pixelcam-${new Date().toISOString()}.png`;
-      link.href = displayCanvasRef.current.toDataURL('image/png');
+      link.href = finalCanvas.toDataURL('image/png');
       link.click();
     } catch (err) {
       console.error('Error saving image:', err);
@@ -245,14 +267,24 @@ function App() {
               style={{ width: '100%' }}
             />
           </div>
-          <label className="effect-control">
-            <input
-              type="checkbox"
-              checked={isGrayscale}
-              onChange={(e) => setIsGrayscale(e.target.checked)}
-            />
-            Grayscale
-          </label>
+          <div className="effect-controls">
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isGrayscale}
+                onChange={(e) => setIsGrayscale(e.target.checked)}
+              />
+              Grayscale
+            </label>
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isFlipped}
+                onChange={(e) => setIsFlipped(e.target.checked)}
+              />
+              Flip Horizontal
+            </label>
+          </div>
         </div>
       </div>
 
@@ -263,6 +295,13 @@ function App() {
           playsInline // Required for iOS
           muted // Required for autoplay
           onLoadedData={() => setVideoLoaded(true)}
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            opacity: 0,
+            pointerEvents: 'none'
+          }}
         />
         <canvas 
           ref={canvasRef}
@@ -271,6 +310,10 @@ function App() {
         <canvas
           ref={displayCanvasRef}
           className="display-canvas"
+          style={{
+            transform: isFlipped ? 'scaleX(-1)' : 'none',
+            transition: 'transform 0.2s'
+          }}
         />
       </div>
 

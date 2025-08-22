@@ -133,6 +133,12 @@ body {
   margin-top: 4px;
 }
 
+.effect-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .effect-control {
   display: flex;
   align-items: center;
@@ -144,6 +150,8 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
   user-select: none;
+  flex: 1;
+  min-width: 120px;
 }
 
 .effect-control:hover {
