@@ -10,6 +10,7 @@ function App() {
   const [targetWidth, setTargetWidth] = useState<number>(32);
   const [videoLoaded, setVideoLoaded] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isGrayscale, setIsGrayscale] = useState<boolean>(false);
   const animationFrameRef = useRef<number>();
 
   useEffect(() => {
@@ -112,7 +113,17 @@ function App() {
       displayCanvas.width = displayWidth;
       displayCanvas.height = displayHeight;
 
+      // Clear both canvases
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
+      
       // Draw and downscale
+      if (isGrayscale) {
+        ctx.filter = 'grayscale(100%)';
+      } else {
+        ctx.filter = 'none';
+      }
+      
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       // Upscale with nearest neighbor
@@ -123,7 +134,7 @@ function App() {
     };
 
     processFrame();
-  }, [targetWidth, videoLoaded]);
+  }, [targetWidth, videoLoaded, isGrayscale]);
 
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
@@ -234,6 +245,14 @@ function App() {
               style={{ width: '100%' }}
             />
           </div>
+          <label className="effect-control">
+            <input
+              type="checkbox"
+              checked={isGrayscale}
+              onChange={(e) => setIsGrayscale(e.target.checked)}
+            />
+            Grayscale
+          </label>
         </div>
       </div>
 
