@@ -11,9 +11,30 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 1rem;
-  background-color: #f5f5f5;
+  background-color: #000;
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-toggle {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  z-index: 20;
+  font-size: 0.9rem;
+  backdrop-filter: blur(10px);
+  transition: background-color 0.2s ease;
+}
+
+.menu-toggle:hover {
+  background: rgba(0, 0, 0, 0.9);
 }
 
 .camera-controls {
@@ -22,21 +43,30 @@ body {
   left: 0;
   right: 0;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.9);
+  padding-top: 3rem;
+  background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(10px);
   z-index: 10;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  transition: transform 0.3s ease-in-out;
+  color: white;
+  transform: translateY(-100%);
+}
+
+.camera-controls.open {
+  transform: translateY(0);
 }
 
 .camera-controls select {
   width: 100%;
   padding: 0.5rem;
   font-size: 1rem;
-  border: 1px solid #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
-  background-color: white;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
 }
 
 .pixel-control {
@@ -61,9 +91,10 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #f5f5f5;
+  background: rgba(0, 0, 0, 0.3);
   padding: 4px 8px;
   border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .number-control button {
@@ -74,19 +105,19 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 1.2rem;
-  background: white;
-  border: 1px solid #ccc;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 4px;
   cursor: pointer;
-  color: #666;
+  color: white;
 }
 
 .number-control button:hover:not(:disabled) {
-  background: #eee;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .number-control button:disabled {
-  opacity: 0.5;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
@@ -94,6 +125,7 @@ body {
   min-width: 50px;
   text-align: center;
   font-weight: 500;
+  color: white;
 }
 
 .resolution-controls input[type="range"] {
@@ -118,11 +150,9 @@ body {
 }
 
 .camera-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  flex: 1;
+  width: 100%;
+  position: relative;
   background-color: #000;
   display: flex;
   align-items: center;
@@ -130,8 +160,8 @@ body {
 }
 
 .display-canvas {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   display: block;
   background: #000;
@@ -145,7 +175,23 @@ video {
   pointer-events: none;
 }
 
-/* Add padding to the app to account for the fixed controls */
-.app {
-  padding-top: calc(1rem + 180px) !important; /* Adjust this value based on your controls height */
+.capture-button {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border: 2px solid white;
+  border-radius: 50px;
+  cursor: pointer;
+  z-index: 20;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.capture-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
 }

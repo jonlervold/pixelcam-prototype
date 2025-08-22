@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 function App() {
+  const [menuOpen, setMenuOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const displayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -185,8 +186,15 @@ function App() {
   };
 
   return (
-    <div className="app">
-      <div className="camera-controls">
+        <div className="app">
+      <button 
+        className="menu-toggle"
+        onClick={() => setMenuOpen(prev => !prev)}
+      >
+        {menuOpen ? '▼ Settings' : '▲ Settings'}
+      </button>
+
+      <div className={`camera-controls ${menuOpen ? 'open' : ''}`}>
         <select value={selectedCamera} onChange={handleCameraChange}>
           {cameras.map(camera => (
             <option key={camera.deviceId} value={camera.deviceId}>
@@ -226,13 +234,11 @@ function App() {
               style={{ width: '100%' }}
             />
           </div>
+        </div>
       </div>
-        <button onClick={captureImage} className="capture-button">
-          Take Photo
-        </button>
-      </div>
+
       <div className="camera-container">
-                  <video 
+        <video 
           ref={videoRef}
           autoPlay 
           playsInline // Required for iOS
@@ -248,6 +254,10 @@ function App() {
           className="display-canvas"
         />
       </div>
+
+      <button onClick={captureImage} className="capture-button">
+        Take Photo
+      </button>
     </div>
   );
 }
