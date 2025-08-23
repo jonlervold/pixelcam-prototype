@@ -15,6 +15,7 @@ function App() {
   const [reducedColors, setReducedColors] = useState<boolean>(false);
   const [colorCount, setColorCount] = useState<number>(8);
   const [hueShift, setHueShift] = useState<number>(0);
+  const [isInverted, setIsInverted] = useState<boolean>(false);
   const colorTableRef = useRef<Uint8Array>();
   const animationFrameRef = useRef<number>();
 
@@ -163,6 +164,9 @@ function App() {
       if (hueShift !== 0) {
         filters.push(`hue-rotate(${hueShift}deg)`);
       }
+      if (isInverted) {
+        filters.push('invert(100%)');
+      }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
       
       // Draw and downscale with rotation if needed
@@ -222,7 +226,7 @@ function App() {
         animationFrameRef.current = undefined;
       }
     };
-  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift]);
+  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift, isInverted]);
 
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
@@ -468,6 +472,14 @@ function App() {
                 onChange={(e) => setReducedColors(e.target.checked)}
               />
               Use Reduced Colors
+            </label>
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isInverted}
+                onChange={(e) => setIsInverted(e.target.checked)}
+              />
+              Invert Luminance
             </label>
           </div>
           <div className="resolution-controls">
