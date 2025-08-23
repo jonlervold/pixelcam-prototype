@@ -739,9 +739,34 @@ function App() {
         />
       </div>
 
-      <button onClick={captureImage} className="capture-button">
-        Take Photo
-        </button>
+      <button 
+        onClick={captureImage} 
+        style={{ 
+          width: '60px',
+          height: '60px',
+          position: 'fixed',
+          bottom: '30px',
+          right: '30px',
+          fontSize: '32px',
+          padding: '0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          margin: '0',
+          transform: 'none',
+          border: 'none',
+          borderRadius: '50%',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          cursor: 'pointer',
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+          lineHeight: '1',
+          textAlign: 'center'
+        }}
+      >
+        📷
+      </button>
       </div>
   );
 }
