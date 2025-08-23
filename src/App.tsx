@@ -8,19 +8,52 @@ function App() {
   const displayCanvasRef = useRef<HTMLCanvasElement>(null);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>('');
-  const [targetWidth, setTargetWidth] = useState<number>(150);
+  const [targetWidth, setTargetWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('pixelcam-targetWidth');
+    return saved ? JSON.parse(saved) : 150;
+  });
   const [videoLoaded, setVideoLoaded] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [isGrayscale, setIsGrayscale] = useState<boolean>(false);
-  const [isFlipped, setIsFlipped] = useState<boolean>(false);
-  const [reducedColors, setReducedColors] = useState<boolean>(false);
-  const [colorCount, setColorCount] = useState<number>(8);
-  const [hueShift, setHueShift] = useState<number>(0);
-  const [useHueShift, setUseHueShift] = useState<boolean>(false);
-  const [isInverted, setIsInverted] = useState<boolean>(false);
-  const [isLuminanceInverted, setIsLuminanceInverted] = useState<boolean>(false);
-  const [isBurstMode, setIsBurstMode] = useState<boolean>(false);
-  const [burstFrames, setBurstFrames] = useState<number>(10);
+  const [isGrayscale, setIsGrayscale] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pixelcam-isGrayscale');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [isFlipped, setIsFlipped] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pixelcam-isFlipped');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [reducedColors, setReducedColors] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pixelcam-reducedColors');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [colorCount, setColorCount] = useState<number>(() => {
+    const saved = localStorage.getItem('pixelcam-colorCount');
+    return saved ? JSON.parse(saved) : 8;
+  });
+  const [hueShift, setHueShift] = useState<number>(() => {
+    const saved = localStorage.getItem('pixelcam-hueShift');
+    return saved ? JSON.parse(saved) : 0;
+  });
+  const [useHueShift, setUseHueShift] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pixelcam-useHueShift');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [isInverted, setIsInverted] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pixelcam-isInverted');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [isLuminanceInverted, setIsLuminanceInverted] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pixelcam-isLuminanceInverted');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [isBurstMode, setIsBurstMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pixelcam-isBurstMode');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [burstFrames, setBurstFrames] = useState<number>(() => {
+    const saved = localStorage.getItem('pixelcam-burstFrames');
+    return saved ? JSON.parse(saved) : 10;
+  });
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
   const colorTableRef = useRef<Uint8Array>();
   const animationFrameRef = useRef<number>();
@@ -116,6 +149,51 @@ function App() {
     
     colorTableRef.current = table;
   }, [colorCount, reducedColors]);
+
+  // Save settings to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem('pixelcam-targetWidth', JSON.stringify(targetWidth));
+  }, [targetWidth]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-isGrayscale', JSON.stringify(isGrayscale));
+  }, [isGrayscale]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-isFlipped', JSON.stringify(isFlipped));
+  }, [isFlipped]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-reducedColors', JSON.stringify(reducedColors));
+  }, [reducedColors]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-colorCount', JSON.stringify(colorCount));
+  }, [colorCount]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-hueShift', JSON.stringify(hueShift));
+  }, [hueShift]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-useHueShift', JSON.stringify(useHueShift));
+  }, [useHueShift]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-isInverted', JSON.stringify(isInverted));
+  }, [isInverted]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-isLuminanceInverted', JSON.stringify(isLuminanceInverted));
+  }, [isLuminanceInverted]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-isBurstMode', JSON.stringify(isBurstMode));
+  }, [isBurstMode]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-burstFrames', JSON.stringify(burstFrames));
+  }, [burstFrames]);
 
   useEffect(() => {
     let isActive = true;  // Flag to track if effect is active
