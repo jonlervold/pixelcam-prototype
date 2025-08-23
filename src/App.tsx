@@ -12,7 +12,8 @@ function App() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isGrayscale, setIsGrayscale] = useState<boolean>(false);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
-  const [colorCount, setColorCount] = useState<number>(256);
+  const [reducedColors, setReducedColors] = useState<boolean>(false);
+  const [colorCount, setColorCount] = useState<number>(8);
   const colorTableRef = useRef<Uint8Array>();
   const animationFrameRef = useRef<number>();
 
@@ -89,9 +90,9 @@ function App() {
   }, [selectedCamera]);
 
 
-  // Update color lookup table when color count changes
+  // Update color lookup table when color count or reduced colors setting changes
   useEffect(() => {
-    if (colorCount === 256) {
+    if (!reducedColors) {
       colorTableRef.current = undefined;
       return;
     }
@@ -106,7 +107,7 @@ function App() {
     }
     
     colorTableRef.current = table;
-  }, [colorCount]);
+  }, [colorCount, reducedColors]);
 
   useEffect(() => {
     let isActive = true;  // Flag to track if effect is active
@@ -172,8 +173,8 @@ function App() {
       }
       ctx.restore();
 
-      // Apply color quantization if needed
-      if (colorCount < 256 && colorTableRef.current) {
+      // Apply color quantization if reduced colors is enabled
+      if (reducedColors && colorTableRef.current) {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
         const table = colorTableRef.current;
@@ -217,7 +218,7 @@ function App() {
         animationFrameRef.current = undefined;
       }
     };
-  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount]);
+  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors]);
 
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
@@ -236,7 +237,7 @@ function App() {
     const updateValue = () => {
       setColorCount(prev => {
         const newValue = increment ? prev + 1 : prev - 1;
-        return Math.min(Math.max(newValue, 2), 256);
+        return Math.min(Math.max(newValue, 2), 20);
       });
     };
 
@@ -395,38 +396,15 @@ function App() {
               style={{ width: '100%' }}
             />
           </div>
-          <div className="resolution-controls">
-            <label className="resolution-input">
-              Colors:
-              <div className="number-control">
-                <button 
-                  onMouseDown={() => startUpdatingColors(false)}
-                  onTouchStart={() => startUpdatingColors(false)}
-                  disabled={colorCount <= 2}
-                >
-                  -
-                </button>
-                <span>{colorCount}</span>
-                <button 
-                  onMouseDown={() => startUpdatingColors(true)}
-                  onTouchStart={() => startUpdatingColors(true)}
-                  disabled={colorCount >= 256}
-                >
-                  +
-                </button>
-              </div>
-            </label>
-            <input
-              type="range"
-              min="2"
-              max="256"
-              step="1"
-              value={colorCount}
-              onChange={handleColorCountChange}
-              style={{ width: '100%' }}
-            />
-          </div>
           <div className="effect-controls">
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={reducedColors}
+                onChange={(e) => setReducedColors(e.target.checked)}
+              />
+              Use Reduced Colors
+            </label>
             <label className="effect-control">
               <input
                 type="checkbox"
@@ -444,6 +422,39 @@ function App() {
               Flip Horizontal
             </label>
           </div>
+          {reducedColors && (
+            <div className="resolution-controls">
+              <label className="resolution-input">
+                Colors:
+                <div className="number-control">
+                  <button 
+                    onMouseDown={() => startUpdatingColors(false)}
+                    onTouchStart={() => startUpdatingColors(false)}
+                    disabled={colorCount <= 2}
+                  >
+                    -
+                  </button>
+                  <span>{colorCount}</span>
+                  <button 
+                    onMouseDown={() => startUpdatingColors(true)}
+                    onTouchStart={() => startUpdatingColors(true)}
+                    disabled={colorCount >= 20}
+                  >
+                    +
+                  </button>
+                </div>
+              </label>
+              <input
+                type="range"
+                min="2"
+                max="20"
+                step="1"
+                value={colorCount}
+                onChange={handleColorCountChange}
+                style={{ width: '100%' }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
