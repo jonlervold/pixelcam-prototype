@@ -12,6 +12,8 @@ function App() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isGrayscale, setIsGrayscale] = useState<boolean>(false);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
+  const [colorCount, setColorCount] = useState<number>(256);
+  const colorTableRef = useRef<Uint8Array>();
   const animationFrameRef = useRef<number>();
 
   useEffect(() => {
@@ -86,8 +88,32 @@ function App() {
     };
   }, [selectedCamera]);
 
+
+  // Update color lookup table when color count changes
   useEffect(() => {
+    if (colorCount === 256) {
+      colorTableRef.current = undefined;
+      return;
+    }
+
+    // Create lookup table for faster color quantization
+    const table = new Uint8Array(256);
+    const step = 256 / (colorCount - 1);
+    
+    for (let i = 0; i < 256; i++) {
+      // Ensure we don't exceed 255 for bright values
+      table[i] = Math.min(255, Math.round(Math.round(i / step) * step));
+    }
+    
+    colorTableRef.current = table;
+  }, [colorCount]);
+
+  useEffect(() => {
+    let isActive = true;  // Flag to track if effect is active
+
     const processFrame = () => {
+      if (!isActive) return;  // Stop if effect is no longer active
+      
       if (!videoRef.current || !canvasRef.current || !displayCanvasRef.current || !videoRef.current.videoWidth || !videoLoaded) {
         animationFrameRef.current = requestAnimationFrame(processFrame);
         return;
@@ -128,15 +154,42 @@ function App() {
       // Draw and downscale
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      // Apply color quantization if needed
+      if (colorCount < 256 && colorTableRef.current) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        const table = colorTableRef.current;
+        
+        // Use the lookup table for faster color quantization
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = table[data[i]];         // R
+          data[i + 1] = table[data[i + 1]]; // G
+          data[i + 2] = table[data[i + 2]]; // B
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+      }
+
       // Upscale with nearest neighbor
       displayCtx.imageSmoothingEnabled = false;
       displayCtx.drawImage(canvas, 0, 0, displayCanvas.width, displayCanvas.height);
 
-      animationFrameRef.current = requestAnimationFrame(processFrame);
+      if (isActive) {
+        animationFrameRef.current = requestAnimationFrame(processFrame);
+      }
     };
 
     processFrame();
-  }, [targetWidth, videoLoaded, isGrayscale, isFlipped]);
+
+    // Cleanup function
+    return () => {
+      isActive = false;  // Mark effect as inactive
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = undefined;
+      }
+    };
+  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount]);
 
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
@@ -147,8 +200,47 @@ function App() {
     setTargetWidth(Number(event.target.value));
   };
 
+  const handleColorCountChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setColorCount(Number(event.target.value));
+  };
+
+  const startUpdatingColors = (increment: boolean) => {
+    const updateValue = () => {
+      setColorCount(prev => {
+        const newValue = increment ? prev + 1 : prev - 1;
+        return Math.min(Math.max(newValue, 2), 256);
+      });
+    };
+
+    // First update
+    updateValue();
+
+    // Then start interval after a delay
+    const timeoutId = setTimeout(() => {
+      const intervalId = setInterval(updateValue, 50);
+      
+      const cleanup = () => {
+        clearInterval(intervalId);
+        document.removeEventListener('mouseup', cleanup);
+        document.removeEventListener('touchend', cleanup);
+      };
+
+      document.addEventListener('mouseup', cleanup);
+      document.addEventListener('touchend', cleanup);
+    }, 250);
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mouseup', cleanup);
+      document.removeEventListener('touchend', cleanup);
+    };
+
+    document.addEventListener('mouseup', cleanup);
+    document.addEventListener('touchend', cleanup);
+  };
+
   // Handle button hold functionality
-  const startUpdating = (increment: boolean) => {
+  const startUpdatingWidth = (increment: boolean) => {
     const updateValue = () => {
       setTargetWidth(prev => {
         const newValue = increment ? prev + 1 : prev - 1;
@@ -241,16 +333,16 @@ function App() {
               Resolution:
               <div className="number-control">
                 <button 
-                  onMouseDown={() => startUpdating(false)}
-                  onTouchStart={() => startUpdating(false)}
+                  onMouseDown={() => startUpdatingWidth(false)}
+                  onTouchStart={() => startUpdatingWidth(false)}
                   disabled={targetWidth <= 2}
                 >
                   -
                 </button>
                 <span>{targetWidth}px</span>
                 <button 
-                  onMouseDown={() => startUpdating(true)}
-                  onTouchStart={() => startUpdating(true)}
+                  onMouseDown={() => startUpdatingWidth(true)}
+                  onTouchStart={() => startUpdatingWidth(true)}
                   disabled={targetWidth >= 640}
                 >
                   +
@@ -264,6 +356,37 @@ function App() {
               max="640"
               value={targetWidth}
               onChange={handleTargetWidthChange}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div className="resolution-controls">
+            <label className="resolution-input">
+              Colors:
+              <div className="number-control">
+                <button 
+                  onMouseDown={() => startUpdatingColors(false)}
+                  onTouchStart={() => startUpdatingColors(false)}
+                  disabled={colorCount <= 2}
+                >
+                  -
+                </button>
+                <span>{colorCount}</span>
+                <button 
+                  onMouseDown={() => startUpdatingColors(true)}
+                  onTouchStart={() => startUpdatingColors(true)}
+                  disabled={colorCount >= 256}
+                >
+                  +
+                </button>
+              </div>
+            </label>
+            <input
+              type="range"
+              min="2"
+              max="256"
+              step="1"
+              value={colorCount}
+              onChange={handleColorCountChange}
               style={{ width: '100%' }}
             />
           </div>
@@ -319,8 +442,8 @@ function App() {
 
       <button onClick={captureImage} className="capture-button">
         Take Photo
-      </button>
-    </div>
+        </button>
+      </div>
   );
 }
 
