@@ -16,6 +16,7 @@ function App() {
   const [reducedColors, setReducedColors] = useState<boolean>(false);
   const [colorCount, setColorCount] = useState<number>(8);
   const [hueShift, setHueShift] = useState<number>(0);
+  const [useHueShift, setUseHueShift] = useState<boolean>(false);
   const [isInverted, setIsInverted] = useState<boolean>(false);
   const [isLuminanceInverted, setIsLuminanceInverted] = useState<boolean>(false);
   const [isBurstMode, setIsBurstMode] = useState<boolean>(false);
@@ -166,7 +167,7 @@ function App() {
       if (isGrayscale) {
         filters.push('grayscale(100%)');
       }
-      if (hueShift !== 0) {
+      if (useHueShift && hueShift !== 0) {
         filters.push(`hue-rotate(${hueShift}deg)`);
       }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
@@ -346,7 +347,7 @@ function App() {
         animationFrameRef.current = undefined;
       }
     };
-  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift, isInverted, isLuminanceInverted]);
+  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift, useHueShift, isInverted, isLuminanceInverted]);
 
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
@@ -692,6 +693,24 @@ function App() {
               />
               Use Reduced Colors
             </label>
+            <div 
+              style={{ 
+                opacity: !isGrayscale ? 1 : 0,
+                maxHeight: !isGrayscale ? '50px' : '0',
+                overflow: 'hidden',
+                transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
+                pointerEvents: !isGrayscale ? 'auto' : 'none'
+              }}
+            >
+              <label className="effect-control">
+                <input
+                  type="checkbox"
+                  checked={useHueShift}
+                  onChange={(e) => setUseHueShift(e.target.checked)}
+                />
+                Use Hue Shift
+              </label>
+            </div>
             <label className="effect-control">
               <input
                 type="checkbox"
@@ -700,7 +719,15 @@ function App() {
               />
               Invert Luminance
             </label>
-            {!isGrayscale && (
+            <div 
+              style={{ 
+                opacity: !isGrayscale ? 1 : 0,
+                maxHeight: !isGrayscale ? '50px' : '0',
+                overflow: 'hidden',
+                transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
+                pointerEvents: !isGrayscale ? 'auto' : 'none'
+              }}
+            >
               <label className="effect-control">
                 <input
                   type="checkbox"
@@ -709,7 +736,7 @@ function App() {
                 />
                 Invert Colors
               </label>
-            )}
+            </div>
             <label className="effect-control">
               <input
                 type="checkbox"
@@ -750,7 +777,15 @@ function App() {
               style={{ width: '100%' }}
             />
           </div>
-          {reducedColors && (
+          <div 
+            style={{ 
+              opacity: reducedColors ? 1 : 0,
+              maxHeight: reducedColors ? '100px' : '0',
+              overflow: 'hidden',
+              transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
+              pointerEvents: reducedColors ? 'auto' : 'none'
+            }}
+          >
             <div className="resolution-controls">
               <label className="resolution-input">
                 Colors:
@@ -782,8 +817,16 @@ function App() {
                 style={{ width: '100%' }}
               />
             </div>
-          )}
-          {!isGrayscale && (
+          </div>
+          <div 
+            style={{ 
+              opacity: useHueShift ? 1 : 0,
+              maxHeight: useHueShift ? '100px' : '0',
+              overflow: 'hidden',
+              transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
+              pointerEvents: useHueShift ? 'auto' : 'none'
+            }}
+          >
             <div className="resolution-controls">
               <label className="resolution-input">
                 Hue Shift:
@@ -815,8 +858,16 @@ function App() {
                 style={{ width: '100%' }}
               />
             </div>
-          )}
-          {isBurstMode && (
+          </div>
+          <div 
+            style={{ 
+              opacity: isBurstMode ? 1 : 0,
+              maxHeight: isBurstMode ? '100px' : '0',
+              overflow: 'hidden',
+              transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
+              pointerEvents: isBurstMode ? 'auto' : 'none'
+            }}
+          >
             <div className="resolution-controls">
               <label className="resolution-input">
                 Burst Frames:
@@ -848,7 +899,7 @@ function App() {
                 style={{ width: '100%' }}
               />
             </div>
-          )}
+          </div>
         </div>
       </div>
 
