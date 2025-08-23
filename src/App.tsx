@@ -102,8 +102,8 @@ function App() {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             deviceId: { exact: selectedCamera }, // Use exact to ensure we get the selected camera
-            width: { min: 640, ideal: 1920, max: 1920 },
-            height: { min: 480, ideal: 1080, max: 1080 }
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           }
         });
         
@@ -214,26 +214,22 @@ function App() {
 
       if (!ctx || !displayCtx) return;
 
-      // Determine if we should rotate (portrait mode)
-      const isPortrait = video.videoHeight > video.videoWidth;
-      
-      // For portrait mode, we'll rotate the image so width becomes height
-      if (isPortrait) {
-        canvas.width = Math.floor(targetWidth * (video.videoHeight / video.videoWidth));
-        canvas.height = targetWidth;
-      } else {
-        canvas.width = targetWidth;
-        canvas.height = Math.floor(targetWidth * (video.videoHeight / video.videoWidth));
-      }
+      // Simplified: No rotation logic - use video dimensions as-is
+      canvas.width = targetWidth;
+      canvas.height = Math.floor(targetWidth * (video.videoHeight / video.videoWidth));
 
-      // Set display canvas size to maintain aspect ratio
-      const maxDimension = 1920;
-      if (isPortrait) {
-        displayCanvas.width = Math.floor(maxDimension * (video.videoHeight / video.videoWidth));
-        displayCanvas.height = maxDimension;
+      // Set display canvas size to maintain aspect ratio, responsive to screen size
+      const videoAspectRatio = video.videoWidth / video.videoHeight;
+      const screenAspectRatio = window.innerWidth / window.innerHeight;
+      
+      if (videoAspectRatio > screenAspectRatio) {
+        // Video is wider relative to screen, fit to width
+        displayCanvas.width = Math.min(window.innerWidth, 1920);
+        displayCanvas.height = Math.floor(displayCanvas.width / videoAspectRatio);
       } else {
-        displayCanvas.width = maxDimension;
-        displayCanvas.height = Math.floor(maxDimension * (video.videoHeight / video.videoWidth));
+        // Video is taller relative to screen, fit to height  
+        displayCanvas.height = Math.min(window.innerHeight, 1920);
+        displayCanvas.width = Math.floor(displayCanvas.height * videoAspectRatio);
       }
 
       // Clear both canvases
@@ -250,17 +246,8 @@ function App() {
       }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
       
-      // Draw and downscale with rotation if needed
-      ctx.save();
-      if (isPortrait) {
-        // Rotate 90 degrees clockwise and translate
-        ctx.translate(canvas.width, 0);
-        ctx.rotate(Math.PI / 2);
-        ctx.drawImage(video, 0, 0, canvas.height, canvas.width);
-      } else {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      }
-      ctx.restore();
+      // Draw and downscale - no rotation needed
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
       // Reset filter to prevent affecting subsequent operations
       ctx.filter = 'none';
@@ -396,18 +383,10 @@ function App() {
         ctx.putImageData(imageData, 0, 0);
       }
 
-      // Upscale with nearest neighbor and rotation if needed
+      // Upscale with nearest neighbor - no rotation needed
       displayCtx.save();
       displayCtx.imageSmoothingEnabled = false;
-      
-      if (isPortrait) {
-        // Rotate -90 degrees to make it upright
-        displayCtx.translate(0, displayCanvas.height);
-        displayCtx.rotate(-Math.PI / 2);
-        displayCtx.drawImage(canvas, 0, 0, displayCanvas.height, displayCanvas.width);
-      } else {
-        displayCtx.drawImage(canvas, 0, 0, displayCanvas.width, displayCanvas.height);
-      }
+      displayCtx.drawImage(canvas, 0, 0, displayCanvas.width, displayCanvas.height);
       displayCtx.restore();
 
       if (isActive) {
