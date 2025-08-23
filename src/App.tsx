@@ -1,80 +1,131 @@
+// React hooks for component state management and side effects
 import { useEffect, useRef, useState } from 'react';
+// Modern GIF encoding library - replaced problematic gif.js with more reliable gifenc
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 
 function App() {
+  // =============================================================================
+  // STATE MANAGEMENT - All the app's state variables and settings
+  // =============================================================================
+  
+  // UI state for collapsible settings menu
   const [menuOpen, setMenuOpen] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const displayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
-  const [selectedCamera, setSelectedCamera] = useState<string>('');
+  
+  // Canvas and video references - React refs don't trigger re-renders when changed
+  const videoRef = useRef<HTMLVideoElement>(null); // Hidden video element that receives camera stream
+  const canvasRef = useRef<HTMLCanvasElement>(null); // Hidden processing canvas for effects
+  const displayCanvasRef = useRef<HTMLCanvasElement>(null); // Visible canvas that shows final result
+  
+  // Camera management state
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]); // List of available cameras
+  const [selectedCamera, setSelectedCamera] = useState<string>(''); // Currently selected camera ID
+  const [videoLoaded, setVideoLoaded] = useState<boolean>(false); // Whether video stream is ready
+  
+  // Core pixelation setting - determines width of final pixelated image
+  // Uses lazy initialization to load from localStorage on first render
   const [targetWidth, setTargetWidth] = useState<number>(() => {
     const saved = localStorage.getItem('pixelcam-targetWidth');
-    return saved ? JSON.parse(saved) : 150;
+    return saved ? JSON.parse(saved) : 150; // Default to 150px wide
   });
-  const [videoLoaded, setVideoLoaded] = useState<boolean>(false);
 
+  // =============================================================================
+  // VISUAL EFFECTS STATE - All the different image processing options
+  // =============================================================================
+  
+  // Basic color effects - each loads from localStorage to persist user preferences
   const [isGrayscale, setIsGrayscale] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-isGrayscale');
     return saved ? JSON.parse(saved) : false;
   });
+  
   const [isFlipped, setIsFlipped] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-isFlipped');
     return saved ? JSON.parse(saved) : false;
   });
+  
+  // Color quantization - reduces number of colors for more retro look
   const [reducedColors, setReducedColors] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-reducedColors');
     return saved ? JSON.parse(saved) : false;
   });
+  
   const [colorCount, setColorCount] = useState<number>(() => {
     const saved = localStorage.getItem('pixelcam-colorCount');
-    return saved ? JSON.parse(saved) : 8;
+    return saved ? JSON.parse(saved) : 8; // Default to 8 colors
   });
+  
+  // Hue shifting - rotates colors around the color wheel
   const [hueShift, setHueShift] = useState<number>(() => {
     const saved = localStorage.getItem('pixelcam-hueShift');
-    return saved ? JSON.parse(saved) : 0;
+    return saved ? JSON.parse(saved) : 0; // Default to no shift
   });
+  
   const [useHueShift, setUseHueShift] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-useHueShift');
     return saved ? JSON.parse(saved) : false;
   });
+  
+  // Color inversion effects
   const [isInverted, setIsInverted] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-isInverted');
     return saved ? JSON.parse(saved) : false;
   });
+  
+  // Luminance inversion - inverts brightness but preserves hue (more subtle than full inversion)
   const [isLuminanceInverted, setIsLuminanceInverted] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-isLuminanceInverted');
     return saved ? JSON.parse(saved) : false;
   });
+  
+  // =============================================================================
+  // BURST MODE STATE - For capturing animated GIFs
+  // =============================================================================
+  
   const [isBurstMode, setIsBurstMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-isBurstMode');
     return saved ? JSON.parse(saved) : false;
   });
+  
   const [burstFrames, setBurstFrames] = useState<number>(() => {
     const saved = localStorage.getItem('pixelcam-burstFrames');
-    return saved ? JSON.parse(saved) : 10;
+    return saved ? JSON.parse(saved) : 10; // Default to 10 frame GIF
   });
-  const [isCapturing, setIsCapturing] = useState<boolean>(false);
+  
+  const [isCapturing, setIsCapturing] = useState<boolean>(false); // Prevents multiple simultaneous captures
+  
+  // =============================================================================
+  // PERFORMANCE OPTIMIZATION REFS
+  // =============================================================================
+  
+  // Pre-computed lookup table for color quantization - avoids recalculating on every frame
   const colorTableRef = useRef<Uint8Array | undefined>(undefined);
+  // Animation frame ID for cleanup - prevents memory leaks
   const animationFrameRef = useRef<number | undefined>(undefined);
 
+  // =============================================================================
+  // CAMERA INITIALIZATION - Runs once when component mounts
+  // =============================================================================
+  
   useEffect(() => {
-    // Get available cameras
+    // Get list of available cameras and set up initial camera selection
     async function getCameras() {
       try {
-        // First request camera permission to get labels
+        // IMPORTANT: Must request permission first to get camera labels
+        // Without this, camera.label will be empty for privacy reasons
         await navigator.mediaDevices.getUserMedia({ video: true })
           .then(stream => {
-            // Stop this initial stream
+            // Immediately stop this permission-requesting stream
+            // We only needed it to unlock camera labels
             stream.getTracks().forEach(track => track.stop());
           });
 
-        // Now we can get the device list with labels
+        // Now we can get the device list with proper labels
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
         setCameras(videoDevices);
         
-        // Select the back camera by default on mobile, or the first camera on desktop
+        // Smart camera selection: prefer back camera on mobile, first camera otherwise
+        // Mobile devices often have "back" in the camera label
         const backCamera = videoDevices.find(device => device.label.toLowerCase().includes('back'));
         setSelectedCamera(backCamera?.deviceId || videoDevices[0]?.deviceId);
       } catch (err) {
@@ -83,27 +134,31 @@ function App() {
     }
 
     getCameras();
-  }, []);
+  }, []); // Empty dependency array = run once on mount
 
+  // =============================================================================
+  // CAMERA STREAM MANAGEMENT - Runs when selected camera changes
+  // =============================================================================
+  
   useEffect(() => {
     // Start camera stream when a camera is selected
     async function startCamera() {
       if (!selectedCamera) return;
       
       try {
-        // First stop any existing stream
+        // Clean up any existing stream to prevent resource leaks
         if (videoRef.current?.srcObject) {
           const oldStream = videoRef.current.srcObject as MediaStream;
           oldStream.getTracks().forEach(track => track.stop());
           videoRef.current.srcObject = null;
         }
 
-        // Request the new stream
+        // Request the new camera stream with specific constraints
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             deviceId: { exact: selectedCamera }, // Use exact to ensure we get the selected camera
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 1280 }, // Request high resolution for better quality
+            height: { ideal: 720 }  // Will be downscaled for pixelation effect
           }
         });
         
@@ -118,19 +173,24 @@ function App() {
 
     startCamera();
 
-    // Cleanup function to stop the camera when component unmounts
+    // Cleanup function - runs when component unmounts or selectedCamera changes
     return () => {
+      // Stop camera stream to free up resources
       if (videoRef.current?.srcObject) {
         const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
         tracks.forEach(track => track.stop());
       }
+      // Cancel any pending animation frames to prevent memory leaks
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [selectedCamera]);
+  }, [selectedCamera]); // Re-run when selectedCamera changes
 
-
+  // =============================================================================
+  // COLOR QUANTIZATION OPTIMIZATION - Pre-compute lookup table
+  // =============================================================================
+  
   // Update color lookup table when color count or reduced colors setting changes
   useEffect(() => {
     if (!reducedColors) {
@@ -139,18 +199,26 @@ function App() {
     }
 
     // Create lookup table for faster color quantization
+    // This maps each possible color value (0-255) to a quantized value
     const table = new Uint8Array(256);
     const step = 256 / (colorCount - 1);
     
     for (let i = 0; i < 256; i++) {
-      // Ensure we don't exceed 255 for bright values
+      // Round each color value to the nearest quantization level
+      // Math.min ensures we don't exceed 255 for bright values
       table[i] = Math.min(255, Math.round(Math.round(i / step) * step));
     }
     
     colorTableRef.current = table;
   }, [colorCount, reducedColors]);
 
-  // Save settings to localStorage when they change
+  // =============================================================================
+  // SETTINGS PERSISTENCE - Save all settings to localStorage
+  // =============================================================================
+  
+  // Each setting gets its own useEffect to save to localStorage when changed
+  // This could be optimized into a custom hook, but kept simple for clarity
+  
   useEffect(() => {
     localStorage.setItem('pixelcam-targetWidth', JSON.stringify(targetWidth));
   }, [targetWidth]);
@@ -195,30 +263,47 @@ function App() {
     localStorage.setItem('pixelcam-burstFrames', JSON.stringify(burstFrames));
   }, [burstFrames]);
 
+  // =============================================================================
+  // MAIN FRAME PROCESSING LOOP - The heart of the pixelation effect
+  // =============================================================================
+  
   useEffect(() => {
-    let isActive = true;  // Flag to track if effect is active
+    let isActive = true;  // Flag to track if effect is active (prevents race conditions)
 
     const processFrame = () => {
-      if (!isActive) return;  // Stop if effect is no longer active
+      // Early exit if component is unmounting or refs aren't ready
+      if (!isActive) return;
       
-      if (!videoRef.current || !canvasRef.current || !displayCanvasRef.current || !videoRef.current.videoWidth || !videoLoaded) {
+      // Wait for all required elements to be ready
+      if (!videoRef.current || !canvasRef.current || !displayCanvasRef.current || 
+          !videoRef.current.videoWidth || !videoLoaded) {
+        // Keep trying until everything is ready
         animationFrameRef.current = requestAnimationFrame(processFrame);
         return;
       }
 
+      // Get references to all our elements
       const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const displayCanvas = displayCanvasRef.current;
+      const canvas = canvasRef.current; // Processing canvas (hidden)
+      const displayCanvas = displayCanvasRef.current; // Display canvas (visible)
+      
+      // Get 2D contexts with performance optimization for frequent pixel reads
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const displayCtx = displayCanvas.getContext('2d', { willReadFrequently: true });
 
       if (!ctx || !displayCtx) return;
 
-      // Simplified: No rotation logic - use video dimensions as-is
+      // =============================================================================
+      // CANVAS SIZING - Calculate dimensions for pixelation and display
+      // =============================================================================
+      
+      // Processing canvas: Small size for pixelation effect
+      // Width is user-controlled, height maintains aspect ratio
       canvas.width = targetWidth;
       canvas.height = Math.floor(targetWidth * (video.videoHeight / video.videoWidth));
 
-      // Set display canvas size to maintain aspect ratio, responsive to screen size
+      // Display canvas: Fits to screen while maintaining aspect ratio
+      // This ensures the pixelated image fills the screen properly on all devices
       const videoAspectRatio = video.videoWidth / video.videoHeight;
       const screenAspectRatio = window.innerWidth / window.innerHeight;
       
@@ -232,11 +317,15 @@ function App() {
         displayCanvas.width = Math.floor(displayCanvas.height * videoAspectRatio);
       }
 
-      // Clear both canvases
+      // Clear both canvases for fresh frame
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
       
-      // Apply filters
+      // =============================================================================
+      // APPLY CSS FILTERS - Fast GPU-accelerated effects
+      // =============================================================================
+      
+      // Build filter string for effects that can be done with CSS filters
       const filters = [];
       if (isGrayscale) {
         filters.push('grayscale(100%)');
@@ -246,20 +335,26 @@ function App() {
       }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
       
-      // Draw and downscale - no rotation needed
+      // Draw video to processing canvas with downscaling (creates pixelation effect)
+      // The small canvas size automatically creates the "pixel" effect
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
       // Reset filter to prevent affecting subsequent operations
       ctx.filter = 'none';
       
-      // Apply color inversion using pixel manipulation to avoid affecting black areas
+      // =============================================================================
+      // PIXEL-LEVEL EFFECTS - Custom image processing that requires pixel manipulation
+      // =============================================================================
+      
+      // Color inversion with black pixel preservation
+      // This is more complex than CSS invert() because we want to preserve black areas
       if (isInverted) {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
         const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
         if (tempCtx) {
-          // Copy current canvas content
+          // Copy current canvas content to temp canvas
           tempCtx.drawImage(canvas, 0, 0);
           
           // Apply invert filter to temp canvas
@@ -269,17 +364,18 @@ function App() {
           tempCtx.filter = 'none';
           tempCtx.globalCompositeOperation = 'source-over';
           
-          // Get image data from both canvases
+          // Get pixel data from both canvases
           const originalData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const filteredData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
           
-          // Replace only non-black pixels
+          // Replace only non-black pixels with inverted versions
+          // This preserves black backgrounds/areas
           for (let i = 0; i < originalData.data.length; i += 4) {
             const r = originalData.data[i];
             const g = originalData.data[i + 1];
             const b = originalData.data[i + 2];
             
-            // If pixel is not black (with small threshold), use filtered version
+            // If pixel is not black (with small threshold for noise), use filtered version
             if (r > 5 || g > 5 || b > 5) {
               originalData.data[i] = filteredData.data[i];
               originalData.data[i + 1] = filteredData.data[i + 1];
@@ -287,28 +383,32 @@ function App() {
             }
           }
           
-          // Put the modified data back
+          // Put the modified data back to the canvas
           ctx.putImageData(originalData, 0, 0);
         }
       }
 
-      // Apply color quantization if reduced colors is enabled
+      // Color quantization - reduces number of colors for retro effect
+      // Uses pre-computed lookup table for performance
       if (reducedColors && colorTableRef.current) {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
         const table = colorTableRef.current;
         
-        // Use the lookup table for faster color quantization
+        // Apply lookup table to each color channel
+        // ImageData.data is [R, G, B, A, R, G, B, A, ...] format
         for (let i = 0; i < data.length; i += 4) {
-          data[i] = table[data[i]];         // R
-          data[i + 1] = table[data[i + 1]]; // G
-          data[i + 2] = table[data[i + 2]]; // B
+          data[i] = table[data[i]];         // Red channel
+          data[i + 1] = table[data[i + 1]]; // Green channel
+          data[i + 2] = table[data[i + 2]]; // Blue channel
+          // Alpha channel (i + 3) is left unchanged
         }
         
         ctx.putImageData(imageData, 0, 0);
       }
 
-      // Apply luminance inversion if enabled
+      // Luminance inversion - inverts brightness while preserving hue
+      // More subtle than full color inversion, creates interesting artistic effects
       if (isLuminanceInverted) {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
@@ -318,29 +418,31 @@ function App() {
           const g = data[i + 1];
           const b = data[i + 2];
           
-          // Skip black pixels (with small threshold) to preserve black areas
+          // Skip black pixels to preserve black areas
           if (r <= 5 && g <= 5 && b <= 5) {
             continue;
           }
           
-          // Convert RGB to HSL
+          // Convert RGB to HSL (Hue, Saturation, Lightness)
           const max = Math.max(r, g, b) / 255;
           const min = Math.min(r, g, b) / 255;
           const diff = max - min;
           
-          // Calculate lightness
+          // Calculate lightness (brightness)
           let lightness = (max + min) / 2;
           
-          // Invert only the lightness
+          // Invert only the lightness component
           lightness = 1 - lightness;
           
           // Convert back to RGB with inverted lightness
           let newR, newG, newB;
           
           if (diff === 0) {
-            // Grayscale - just invert lightness
+            // Grayscale pixel - just invert lightness
             newR = newG = newB = Math.round(lightness * 255);
           } else {
+            // Color pixel - preserve hue and saturation, invert lightness
+            
             // Calculate saturation
             const saturation = lightness > 0.5 ? diff / (2 - max - min) : diff / (max + min);
             
@@ -354,7 +456,7 @@ function App() {
               hue = ((r / 255 - g / 255) / diff + 4) / 6;
             }
             
-            // Convert HSL back to RGB
+            // Convert HSL back to RGB with preserved hue/saturation, inverted lightness
             const hue2rgb = (p: number, q: number, t: number) => {
               if (t < 0) t += 1;
               if (t > 1) t -= 1;
@@ -375,6 +477,7 @@ function App() {
             }
           }
           
+          // Clamp values to valid range and update pixel data
           data[i] = Math.max(0, Math.min(255, newR));
           data[i + 1] = Math.max(0, Math.min(255, newG));
           data[i + 2] = Math.max(0, Math.min(255, newB));
@@ -383,22 +486,28 @@ function App() {
         ctx.putImageData(imageData, 0, 0);
       }
 
-      // Upscale with nearest neighbor - no rotation needed
+      // =============================================================================
+      // FINAL DISPLAY - Upscale processed image to display canvas
+      // =============================================================================
+      
+      // Upscale the small processed canvas to the large display canvas
       displayCtx.save();
-      displayCtx.imageSmoothingEnabled = false;
+      displayCtx.imageSmoothingEnabled = false; // Nearest neighbor scaling preserves pixel edges
       displayCtx.drawImage(canvas, 0, 0, displayCanvas.width, displayCanvas.height);
       displayCtx.restore();
 
+      // Schedule next frame if still active
       if (isActive) {
         animationFrameRef.current = requestAnimationFrame(processFrame);
       }
     };
 
+    // Start the processing loop
     processFrame();
 
-    // Cleanup function
+    // Cleanup function - runs when component unmounts or dependencies change
     return () => {
-      isActive = false;  // Mark effect as inactive
+      isActive = false;  // Mark effect as inactive to stop processing
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = undefined;
@@ -406,12 +515,16 @@ function App() {
     };
   }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift, useHueShift, isInverted, isLuminanceInverted]);
 
+  // =============================================================================
+  // EVENT HANDLERS - Simple handlers for form controls
+  // =============================================================================
+  
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
   };
 
   const handleTargetWidthChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    // For range input: value is already constrained
+    // Range input values are already constrained by min/max attributes
     setTargetWidth(Number(event.target.value));
   };
 
@@ -423,31 +536,41 @@ function App() {
     setHueShift(Number(event.target.value));
   };
 
+  // =============================================================================
+  // BUTTON HOLD FUNCTIONALITY - For increment/decrement buttons
+  // =============================================================================
+  
+  // These functions handle the "hold to repeat" functionality for +/- buttons
+  // Pattern: immediate update, then delayed repeat, with proper cleanup
+  
   const startUpdatingColors = (increment: boolean) => {
     const updateValue = () => {
       setColorCount(prev => {
         const newValue = increment ? prev + 1 : prev - 1;
-        return Math.min(Math.max(newValue, 2), 20);
+        return Math.min(Math.max(newValue, 2), 20); // Clamp between 2 and 20
       });
     };
 
-    // First update
+    // First update happens immediately
     updateValue();
 
-    // Then start interval after a delay
+    // Then start repeating after a delay
     const timeoutId = setTimeout(() => {
-      const intervalId = setInterval(updateValue, 50);
+      const intervalId = setInterval(updateValue, 50); // Update every 50ms while holding
       
+      // Cleanup function for the interval
       const cleanup = () => {
         clearInterval(intervalId);
         document.removeEventListener('mouseup', cleanup);
         document.removeEventListener('touchend', cleanup);
       };
 
+      // Listen for mouse/touch release to stop repeating
       document.addEventListener('mouseup', cleanup);
       document.addEventListener('touchend', cleanup);
-    }, 250);
+    }, 250); // Start repeating after 250ms hold
 
+    // Cleanup function for the timeout (in case mouse up happens before interval starts)
     const cleanup = () => {
       clearTimeout(timeoutId);
       document.removeEventListener('mouseup', cleanup);
@@ -462,14 +585,13 @@ function App() {
     const updateValue = () => {
       setHueShift(prev => {
         const newValue = increment ? prev + 5 : prev - 5;
-        return Math.min(Math.max(newValue, -180), 180);
+        return Math.min(Math.max(newValue, -180), 180); // Clamp between -180 and 180
       });
     };
 
-    // First update
+    // Same pattern as above - immediate update, then delayed repeat
     updateValue();
 
-    // Then start interval after a delay
     const timeoutId = setTimeout(() => {
       const intervalId = setInterval(updateValue, 50);
       
@@ -497,7 +619,7 @@ function App() {
     const updateValue = () => {
       setBurstFrames(prev => {
         const newValue = increment ? prev + 1 : prev - 1;
-        return Math.min(Math.max(newValue, 3), 30);
+        return Math.min(Math.max(newValue, 3), 30); // Clamp between 3 and 30 frames
       });
     };
 
@@ -525,25 +647,20 @@ function App() {
     document.addEventListener('touchend', cleanup);
   };
 
-
-
-  // Handle button hold functionality
   const startUpdatingWidth = (increment: boolean) => {
     const updateValue = () => {
       setTargetWidth(prev => {
         const newValue = increment ? prev + 1 : prev - 1;
-        return Math.min(Math.max(newValue, 2), 640);
+        return Math.min(Math.max(newValue, 2), 640); // Clamp between 2 and 640 pixels
       });
     };
 
-    // First update
+    // Same pattern as other button hold functions
     updateValue();
 
-    // Then start interval after a delay
     const timeoutId = setTimeout(() => {
-      const intervalId = setInterval(updateValue, 50); // Update every 50ms while holding
+      const intervalId = setInterval(updateValue, 50);
       
-      // Store the interval ID so we can clear it on mouse up
       const cleanup = () => {
         clearInterval(intervalId);
         document.removeEventListener('mouseup', cleanup);
@@ -552,9 +669,8 @@ function App() {
 
       document.addEventListener('mouseup', cleanup);
       document.addEventListener('touchend', cleanup);
-    }, 250); // Start repeating after 250ms hold
+    }, 250);
 
-    // Store the timeout ID so we can clear it if mouse up happens before interval starts
     const cleanup = () => {
       clearTimeout(timeoutId);
       document.removeEventListener('mouseup', cleanup);
@@ -565,9 +681,14 @@ function App() {
     document.addEventListener('touchend', cleanup);
   };
 
+  // =============================================================================
+  // BURST GIF CAPTURE - Creates animated GIF from multiple frames
+  // =============================================================================
+  
   const captureBurstGif = async () => {
     console.log('🎬 Starting burst GIF capture (using gifenc)...');
     
+    // Prevent multiple simultaneous captures
     if (!displayCanvasRef.current || isCapturing) {
       console.log('❌ Cannot start capture - missing canvas or already capturing');
       return;
@@ -577,62 +698,72 @@ function App() {
     console.log('✅ Set capturing state to true');
     
     try {
-      // Capture all frames first
+      // =============================================================================
+      // FRAME CAPTURE PHASE - Capture multiple frames over time
+      // =============================================================================
+      
       const frames: ImageData[] = [];
-      const frameDelay = 100; // 100ms between frames
+      const frameDelay = 100; // 100ms between frames (10 FPS)
       const width = displayCanvasRef.current.width;
       const height = displayCanvasRef.current.height;
       
       console.log(`📹 Starting to capture ${burstFrames} frames...`);
       console.log(`📐 Frame dimensions: ${width}x${height}`);
       
+      // Capture each frame with a delay between them
       for (let i = 0; i < burstFrames; i++) {
         console.log(`📸 Capturing frame ${i + 1}/${burstFrames}...`);
         
-        // Create a copy of the current frame
+        // Create temporary canvas to apply flip if needed
         const frameCanvas = document.createElement('canvas');
         frameCanvas.width = width;
         frameCanvas.height = height;
         const frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
         
         if (frameCtx) {
-          // Apply flip if needed
+          // Apply horizontal flip if enabled (for final output)
           if (isFlipped) {
             frameCtx.scale(-1, 1);
             frameCtx.translate(-frameCanvas.width, 0);
           }
           
+          // Copy current display canvas to frame canvas
           frameCtx.imageSmoothingEnabled = false;
           frameCtx.drawImage(displayCanvasRef.current, 0, 0);
           
-          // Get image data
+          // Extract pixel data for GIF encoding
           const imageData = frameCtx.getImageData(0, 0, width, height);
           frames.push(imageData);
           console.log(`✅ Frame ${i + 1} captured`);
         }
         
-        // Wait before next frame
+        // Wait before capturing next frame (except for last frame)
         if (i < burstFrames - 1) {
           await new Promise(resolve => setTimeout(resolve, frameDelay));
         }
       }
       
+      // =============================================================================
+      // GIF ENCODING PHASE - Convert frames to animated GIF
+      // =============================================================================
+      
       console.log('🎞️ All frames captured, creating GIF with gifenc...');
       
-      // Create GIF encoder
+      // Create GIF encoder instance
       const gif = GIFEncoder();
       
-      // Process each frame
+      // Process each captured frame
       for (let i = 0; i < frames.length; i++) {
         console.log(`🎨 Processing frame ${i + 1}/${frames.length}...`);
         
         const imageData = frames[i];
         
-        // Quantize colors (reduce to 256 colors max for GIF)
+        // Quantize colors - GIF format supports max 256 colors
+        // This reduces the color palette while trying to preserve image quality
         const palette = quantize(imageData.data, 256);
         const index = applyPalette(imageData.data, palette);
         
-        // Write frame to GIF
+        // Add frame to GIF with timing information
         gif.writeFrame(index, width, height, {
           palette,
           delay: frameDelay / 10, // gifenc expects delay in centiseconds (1/100s)
@@ -641,20 +772,25 @@ function App() {
         console.log(`✅ Frame ${i + 1} processed`);
       }
       
+      // Finalize GIF encoding
       console.log('🏁 Finalizing GIF...');
       gif.finish();
       
-      // Get the GIF bytes
+      // =============================================================================
+      // DOWNLOAD PHASE - Create blob and trigger download
+      // =============================================================================
+      
+      // Get the final GIF data as bytes
       const gifBytes = gif.bytes();
       console.log(`🎉 GIF created! Size: ${gifBytes.length} bytes`);
       
-      // Create blob and download
+      // Create blob and download link
       const blob = new Blob([gifBytes], { type: 'image/gif' });
       const link = document.createElement('a');
       link.download = `pixelcam-burst-${new Date().toISOString()}.gif`;
       link.href = URL.createObjectURL(blob);
       link.click();
-      URL.revokeObjectURL(link.href);
+      URL.revokeObjectURL(link.href); // Clean up object URL
       
       console.log('💾 GIF downloaded successfully');
       setIsCapturing(false);
@@ -666,6 +802,10 @@ function App() {
     }
   };
 
+  // =============================================================================
+  // SINGLE IMAGE CAPTURE - Captures and downloads a single PNG
+  // =============================================================================
+  
   const captureImage = () => {
     if (!displayCanvasRef.current) return;
     
@@ -674,26 +814,32 @@ function App() {
       const displayCtx = displayCanvas.getContext('2d', { willReadFrequently: true });
       if (!displayCtx) return;
 
-      // Get the image data to analyze for black bars
+      // =============================================================================
+      // BLACK BAR DETECTION - Find actual image content bounds
+      // =============================================================================
+      
+      // Get all pixel data to analyze
       const imageData = displayCtx.getImageData(0, 0, displayCanvas.width, displayCanvas.height);
       const data = imageData.data;
       
-      // Function to check if a pixel is black (or very dark)
+      // Helper function to identify black/empty pixels
       const isBlackPixel = (r: number, g: number, b: number) => {
         return r < 10 && g < 10 && b < 10; // Very dark threshold
       };
       
-      // Find the actual content bounds by scanning for non-black pixels
+      // Scan entire image to find content bounds
+      // This removes black bars that might appear due to aspect ratio differences
       let minX = displayCanvas.width, maxX = 0;
       let minY = displayCanvas.height, maxY = 0;
       
       for (let y = 0; y < displayCanvas.height; y++) {
         for (let x = 0; x < displayCanvas.width; x++) {
-          const i = (y * displayCanvas.width + x) * 4;
+          const i = (y * displayCanvas.width + x) * 4; // RGBA pixel index
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
           
+          // If pixel has content (not black), update bounds
           if (!isBlackPixel(r, g, b)) {
             minX = Math.min(minX, x);
             maxX = Math.max(maxX, x);
@@ -703,11 +849,15 @@ function App() {
         }
       }
       
-      // If we found content, crop to those bounds, otherwise use full canvas
+      // Calculate crop dimensions (fallback to full canvas if no content found)
       const cropX = minX < displayCanvas.width ? minX : 0;
       const cropY = minY < displayCanvas.height ? minY : 0;
       const cropWidth = maxX > 0 ? (maxX - minX + 1) : displayCanvas.width;
       const cropHeight = maxY > 0 ? (maxY - minY + 1) : displayCanvas.height;
+      
+      // =============================================================================
+      // FINAL IMAGE CREATION - Create cropped final image
+      // =============================================================================
       
       // Create final canvas with cropped dimensions
       const finalCanvas = document.createElement('canvas');
@@ -717,34 +867,41 @@ function App() {
       finalCanvas.width = cropWidth;
       finalCanvas.height = cropHeight;
 
-      // Apply flip if needed
+      // Apply horizontal flip if enabled
       if (isFlipped) {
         finalCtx.scale(-1, 1);
         finalCtx.translate(-finalCanvas.width, 0);
       }
 
-      // Draw only the non-black content area
-      finalCtx.imageSmoothingEnabled = false;
+      // Draw only the content area (cropped) to final canvas
+      finalCtx.imageSmoothingEnabled = false; // Preserve pixel edges
       finalCtx.drawImage(
         displayCanvas,
-        cropX, cropY, cropWidth, cropHeight,  // Source: cropped area
+        cropX, cropY, cropWidth, cropHeight,  // Source: cropped area from display canvas
         0, 0, finalCanvas.width, finalCanvas.height  // Destination: full final canvas
       );
 
-      // Create download link
+      // Create and trigger download
       const link = document.createElement('a');
       link.download = `pixelcam-${new Date().toISOString()}.png`;
       link.href = finalCanvas.toDataURL('image/png');
       link.click();
       
-
     } catch (err) {
       console.error('Error saving image:', err);
     }
   };
 
+  // =============================================================================
+  // RENDER - The component's JSX structure
+  // =============================================================================
+  
   return (
-        <div className="app">
+    <div className="app">
+      {/* =============================================================================
+          SETTINGS MENU - Collapsible settings panel
+          ============================================================================= */}
+      
       <button 
         className="menu-toggle"
         onClick={() => setMenuOpen(prev => !prev)}
@@ -753,6 +910,7 @@ function App() {
       </button>
 
       <div className={`camera-controls ${menuOpen ? 'open' : ''}`}>
+        {/* Camera selection dropdown */}
         <select value={selectedCamera} onChange={handleCameraChange}>
           {cameras.map(camera => (
             <option key={camera.deviceId} value={camera.deviceId}>
@@ -760,7 +918,12 @@ function App() {
             </option>
           ))}
         </select>
+        
         <div className="pixel-control">
+          {/* =============================================================================
+              EFFECT CONTROLS - Checkboxes for various visual effects
+              ============================================================================= */}
+          
           <div className="effect-controls">
             <label className="effect-control">
               <input
@@ -770,6 +933,7 @@ function App() {
               />
               Flip Horizontal
             </label>
+            
             <label className="effect-control">
               <input
                 type="checkbox"
@@ -778,6 +942,7 @@ function App() {
               />
               Grayscale
             </label>
+            
             <label className="effect-control">
               <input
                 type="checkbox"
@@ -786,6 +951,8 @@ function App() {
               />
               Use Reduced Colors
             </label>
+            
+            {/* Hue shift control - hidden when grayscale is enabled */}
             <div 
               style={{ 
                 opacity: !isGrayscale ? 1 : 0,
@@ -804,6 +971,7 @@ function App() {
                 Use Hue Shift
               </label>
             </div>
+            
             <label className="effect-control">
               <input
                 type="checkbox"
@@ -812,6 +980,8 @@ function App() {
               />
               Invert Luminance
             </label>
+            
+            {/* Color inversion control - hidden when grayscale is enabled */}
             <div 
               style={{ 
                 opacity: !isGrayscale ? 1 : 0,
@@ -830,6 +1000,7 @@ function App() {
                 Invert Colors
               </label>
             </div>
+            
             <label className="effect-control">
               <input
                 type="checkbox"
@@ -839,6 +1010,11 @@ function App() {
               Burst GIF Mode
             </label>
           </div>
+          
+          {/* =============================================================================
+              RESOLUTION CONTROLS - Main pixelation setting
+              ============================================================================= */}
+          
           <div className="resolution-controls">
             <label className="resolution-input">
               Resolution:
@@ -861,6 +1037,7 @@ function App() {
               </div>
               wide
             </label>
+            {/* Range slider for resolution */}
             <input
               type="range"
               min="2"
@@ -870,6 +1047,11 @@ function App() {
               style={{ width: '100%' }}
             />
           </div>
+          
+          {/* =============================================================================
+              COLOR COUNT CONTROLS - Shown only when reduced colors is enabled
+              ============================================================================= */}
+          
           <div 
             style={{ 
               opacity: reducedColors ? 1 : 0,
@@ -911,6 +1093,11 @@ function App() {
               />
             </div>
           </div>
+          
+          {/* =============================================================================
+              HUE SHIFT CONTROLS - Shown only when hue shift is enabled
+              ============================================================================= */}
+          
           <div 
             style={{ 
               opacity: useHueShift ? 1 : 0,
@@ -952,6 +1139,11 @@ function App() {
               />
             </div>
           </div>
+          
+          {/* =============================================================================
+              BURST FRAME CONTROLS - Shown only when burst mode is enabled
+              ============================================================================= */}
+          
           <div 
             style={{ 
               opacity: isBurstMode ? 1 : 0,
@@ -996,12 +1188,17 @@ function App() {
         </div>
       </div>
 
+      {/* =============================================================================
+          CAMERA DISPLAY - The main video and canvas elements
+          ============================================================================= */}
+      
       <div className="camera-container">
+        {/* Hidden video element that receives the camera stream */}
         <video 
           ref={videoRef}
           autoPlay 
-          playsInline // Required for iOS
-          muted // Required for autoplay
+          playsInline // Required for iOS to prevent fullscreen
+          muted // Required for autoplay in most browsers
           onLoadedData={() => setVideoLoaded(true)}
           style={{
             position: 'absolute',
@@ -1011,22 +1208,31 @@ function App() {
             pointerEvents: 'none'
           }}
         />
+        
+        {/* Hidden processing canvas - where effects are applied */}
         <canvas 
           ref={canvasRef}
-          style={{ display: 'none' }} // Hidden canvas for processing
+          style={{ display: 'none' }}
         />
+        
+        {/* Visible display canvas - shows the final pixelated result */}
         <canvas
           ref={displayCanvasRef}
           className="display-canvas"
           style={{
+            // CSS transform for flip effect (applied in addition to canvas-based flip for captures)
             transform: isFlipped ? 'scaleX(-1)' : 'none',
             transition: 'transform 0.2s'
           }}
         />
       </div>
 
+      {/* =============================================================================
+          CAPTURE BUTTON - Main action button for taking photos/GIFs
+          ============================================================================= */}
+      
       <button 
-        onClick={isBurstMode ? captureBurstGif : captureImage} 
+        onClick={isBurstMode ? captureBurstGif : captureImage}
         disabled={isCapturing}
         style={{ 
           width: '60px',
@@ -1044,6 +1250,7 @@ function App() {
           transform: 'none',
           border: 'none',
           borderRadius: '50%',
+          // Dynamic background color based on mode and state
           backgroundColor: isCapturing ? 'rgba(255, 0, 0, 0.7)' : (isBurstMode ? 'rgba(0, 150, 0, 0.7)' : 'rgba(0, 0, 0, 0.7)'),
           color: 'white',
           cursor: isCapturing ? 'not-allowed' : 'pointer',
@@ -1053,9 +1260,10 @@ function App() {
           opacity: isCapturing ? 0.6 : 1
         }}
       >
+        {/* Dynamic icon based on current state */}
         {isCapturing ? '⏳' : (isBurstMode ? '🎬' : '📷')}
       </button>
-      </div>
+    </div>
   );
 }
 
