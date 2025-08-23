@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import GIF from 'gif.js';
+import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -209,8 +209,8 @@ function App() {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const displayCanvas = displayCanvasRef.current;
-      const ctx = canvas.getContext('2d');
-      const displayCtx = displayCanvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const displayCtx = displayCanvas.getContext('2d', { willReadFrequently: true });
 
       if (!ctx || !displayCtx) return;
 
@@ -257,7 +257,7 @@ function App() {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
+        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
         if (tempCtx) {
           // Copy current canvas content
           tempCtx.drawImage(canvas, 0, 0);
@@ -566,29 +566,34 @@ function App() {
   };
 
   const captureBurstGif = async () => {
-    if (!displayCanvasRef.current || isCapturing) return;
+    console.log('🎬 Starting burst GIF capture (using gifenc)...');
+    
+    if (!displayCanvasRef.current || isCapturing) {
+      console.log('❌ Cannot start capture - missing canvas or already capturing');
+      return;
+    }
     
     setIsCapturing(true);
+    console.log('✅ Set capturing state to true');
     
     try {
-      // Create GIF encoder
-      const gif = new GIF({
-        workers: 2,
-        quality: 10,
-        width: displayCanvasRef.current.width,
-        height: displayCanvasRef.current.height
-      });
-      
-      // Capture frames
-      const capturedFrames: HTMLCanvasElement[] = [];
+      // Capture all frames first
+      const frames: ImageData[] = [];
       const frameDelay = 100; // 100ms between frames
+      const width = displayCanvasRef.current.width;
+      const height = displayCanvasRef.current.height;
+      
+      console.log(`📹 Starting to capture ${burstFrames} frames...`);
+      console.log(`📐 Frame dimensions: ${width}x${height}`);
       
       for (let i = 0; i < burstFrames; i++) {
+        console.log(`📸 Capturing frame ${i + 1}/${burstFrames}...`);
+        
         // Create a copy of the current frame
         const frameCanvas = document.createElement('canvas');
-        frameCanvas.width = displayCanvasRef.current.width;
-        frameCanvas.height = displayCanvasRef.current.height;
-        const frameCtx = frameCanvas.getContext('2d');
+        frameCanvas.width = width;
+        frameCanvas.height = height;
+        const frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
         
         if (frameCtx) {
           // Apply flip if needed
@@ -600,9 +605,10 @@ function App() {
           frameCtx.imageSmoothingEnabled = false;
           frameCtx.drawImage(displayCanvasRef.current, 0, 0);
           
-          // Add frame to GIF
-          gif.addFrame(frameCanvas, { delay: frameDelay });
-          capturedFrames.push(frameCanvas);
+          // Get image data
+          const imageData = frameCtx.getImageData(0, 0, width, height);
+          frames.push(imageData);
+          console.log(`✅ Frame ${i + 1} captured`);
         }
         
         // Wait before next frame
@@ -611,20 +617,51 @@ function App() {
         }
       }
       
-      // Render GIF
-      gif.on('finished', function(blob: Blob) {
-        const link = document.createElement('a');
-        link.download = `pixelcam-burst-${new Date().toISOString()}.gif`;
-        link.href = URL.createObjectURL(blob);
-        link.click();
-        URL.revokeObjectURL(link.href);
-        setIsCapturing(false);
-      });
+      console.log('🎞️ All frames captured, creating GIF with gifenc...');
       
-      gif.render();
+      // Create GIF encoder
+      const gif = GIFEncoder();
+      
+      // Process each frame
+      for (let i = 0; i < frames.length; i++) {
+        console.log(`🎨 Processing frame ${i + 1}/${frames.length}...`);
+        
+        const imageData = frames[i];
+        
+        // Quantize colors (reduce to 256 colors max for GIF)
+        const palette = quantize(imageData.data, 256);
+        const index = applyPalette(imageData.data, palette);
+        
+        // Write frame to GIF
+        gif.writeFrame(index, width, height, {
+          palette,
+          delay: frameDelay / 10, // gifenc expects delay in centiseconds (1/100s)
+        });
+        
+        console.log(`✅ Frame ${i + 1} processed`);
+      }
+      
+      console.log('🏁 Finalizing GIF...');
+      gif.finish();
+      
+      // Get the GIF bytes
+      const gifBytes = gif.bytes();
+      console.log(`🎉 GIF created! Size: ${gifBytes.length} bytes`);
+      
+      // Create blob and download
+      const blob = new Blob([gifBytes], { type: 'image/gif' });
+      const link = document.createElement('a');
+      link.download = `pixelcam-burst-${new Date().toISOString()}.gif`;
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+      
+      console.log('💾 GIF downloaded successfully');
+      setIsCapturing(false);
+      console.log('✅ Capture state reset');
       
     } catch (err) {
-      console.error('Error creating burst GIF:', err);
+      console.error('💥 Error creating burst GIF:', err);
       setIsCapturing(false);
     }
   };
@@ -634,7 +671,7 @@ function App() {
     
     try {
       const displayCanvas = displayCanvasRef.current;
-      const displayCtx = displayCanvas.getContext('2d');
+      const displayCtx = displayCanvas.getContext('2d', { willReadFrequently: true });
       if (!displayCtx) return;
 
       // Get the image data to analyze for black bars
@@ -674,7 +711,7 @@ function App() {
       
       // Create final canvas with cropped dimensions
       const finalCanvas = document.createElement('canvas');
-      const finalCtx = finalCanvas.getContext('2d');
+      const finalCtx = finalCanvas.getContext('2d', { willReadFrequently: true });
       if (!finalCtx) return;
 
       finalCanvas.width = cropWidth;
