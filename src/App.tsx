@@ -365,6 +365,32 @@ function App() {
           ))}
         </select>
         <div className="pixel-control">
+          <div className="effect-controls">
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={reducedColors}
+                onChange={(e) => setReducedColors(e.target.checked)}
+              />
+              Use Reduced Colors
+            </label>
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isGrayscale}
+                onChange={(e) => setIsGrayscale(e.target.checked)}
+              />
+              Grayscale
+            </label>
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isFlipped}
+                onChange={(e) => setIsFlipped(e.target.checked)}
+              />
+              Flip Horizontal
+            </label>
+          </div>
           <div className="resolution-controls">
             <label className="resolution-input">
               Resolution:
@@ -395,32 +421,6 @@ function App() {
               onChange={handleTargetWidthChange}
               style={{ width: '100%' }}
             />
-          </div>
-          <div className="effect-controls">
-            <label className="effect-control">
-              <input
-                type="checkbox"
-                checked={reducedColors}
-                onChange={(e) => setReducedColors(e.target.checked)}
-              />
-              Use Reduced Colors
-            </label>
-            <label className="effect-control">
-              <input
-                type="checkbox"
-                checked={isGrayscale}
-                onChange={(e) => setIsGrayscale(e.target.checked)}
-              />
-              Grayscale
-            </label>
-            <label className="effect-control">
-              <input
-                type="checkbox"
-                checked={isFlipped}
-                onChange={(e) => setIsFlipped(e.target.checked)}
-              />
-              Flip Horizontal
-            </label>
           </div>
           {reducedColors && (
             <div className="resolution-controls">
