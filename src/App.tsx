@@ -310,22 +310,52 @@ function App() {
     if (!displayCanvasRef.current) return;
     
     try {
-      // Create a temporary canvas for the final image
+      const displayCanvas = displayCanvasRef.current;
+      const displayCtx = displayCanvas.getContext('2d');
+      if (!displayCtx) return;
+
+      // Get the image data to analyze for black bars
+      const imageData = displayCtx.getImageData(0, 0, displayCanvas.width, displayCanvas.height);
+      const data = imageData.data;
+      
+      // Function to check if a pixel is black (or very dark)
+      const isBlackPixel = (r: number, g: number, b: number) => {
+        return r < 10 && g < 10 && b < 10; // Very dark threshold
+      };
+      
+      // Find the actual content bounds by scanning for non-black pixels
+      let minX = displayCanvas.width, maxX = 0;
+      let minY = displayCanvas.height, maxY = 0;
+      
+      for (let y = 0; y < displayCanvas.height; y++) {
+        for (let x = 0; x < displayCanvas.width; x++) {
+          const i = (y * displayCanvas.width + x) * 4;
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          if (!isBlackPixel(r, g, b)) {
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      }
+      
+      // If we found content, crop to those bounds, otherwise use full canvas
+      const cropX = minX < displayCanvas.width ? minX : 0;
+      const cropY = minY < displayCanvas.height ? minY : 0;
+      const cropWidth = maxX > 0 ? (maxX - minX + 1) : displayCanvas.width;
+      const cropHeight = maxY > 0 ? (maxY - minY + 1) : displayCanvas.height;
+      
+      // Create final canvas with cropped dimensions
       const finalCanvas = document.createElement('canvas');
       const finalCtx = finalCanvas.getContext('2d');
       if (!finalCtx) return;
 
-      // Get dimensions from the processed canvas
-      const isPortrait = canvasRef.current.height > canvasRef.current.width;
-      
-      // Set dimensions to maintain aspect ratio at 1920px on the long edge
-      if (isPortrait) {
-        finalCanvas.height = 1920;
-        finalCanvas.width = Math.round(1920 * (canvasRef.current.width / canvasRef.current.height));
-      } else {
-        finalCanvas.width = 1920;
-        finalCanvas.height = Math.round(1920 * (canvasRef.current.height / canvasRef.current.width));
-      }
+      finalCanvas.width = cropWidth;
+      finalCanvas.height = cropHeight;
 
       // Apply flip if needed
       if (isFlipped) {
@@ -333,15 +363,24 @@ function App() {
         finalCtx.translate(-finalCanvas.width, 0);
       }
 
-      // Draw the display canvas content with nearest-neighbor scaling
+      // Draw only the non-black content area
       finalCtx.imageSmoothingEnabled = false;
-      finalCtx.drawImage(displayCanvasRef.current, 0, 0, finalCanvas.width, finalCanvas.height);
+      finalCtx.drawImage(
+        displayCanvas,
+        cropX, cropY, cropWidth, cropHeight,  // Source: cropped area
+        0, 0, finalCanvas.width, finalCanvas.height  // Destination: full final canvas
+      );
 
       // Create download link
       const link = document.createElement('a');
       link.download = `pixelcam-${new Date().toISOString()}.png`;
       link.href = finalCanvas.toDataURL('image/png');
       link.click();
+      
+      console.log('Exported with crop:', { 
+        original: { width: displayCanvas.width, height: displayCanvas.height },
+        cropped: { width: cropWidth, height: cropHeight, x: cropX, y: cropY }
+      });
     } catch (err) {
       console.error('Error saving image:', err);
     }
