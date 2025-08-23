@@ -127,18 +127,27 @@ function App() {
 
       if (!ctx || !displayCtx) return;
 
-      // Set canvas sizes
-      const videoAspect = video.videoWidth / video.videoHeight;
-      const displayWidth = Math.min(1920, video.videoWidth);
-      const displayHeight = displayWidth / videoAspect;
+      // Determine if we should rotate (portrait mode)
+      const isPortrait = video.videoHeight > video.videoWidth;
+      
+      // For portrait mode, we'll rotate the image so width becomes height
+      if (isPortrait) {
+        canvas.width = Math.floor(targetWidth * (video.videoHeight / video.videoWidth));
+        canvas.height = targetWidth;
+      } else {
+        canvas.width = targetWidth;
+        canvas.height = Math.floor(targetWidth * (video.videoHeight / video.videoWidth));
+      }
 
-      // Set the downscaled size
-      canvas.width = targetWidth;
-      canvas.height = Math.floor(targetWidth / videoAspect);
-
-      // Set the display size (HD or original)
-      displayCanvas.width = displayWidth;
-      displayCanvas.height = displayHeight;
+      // Set display canvas size to maintain aspect ratio
+      const maxDimension = 1920;
+      if (isPortrait) {
+        displayCanvas.width = Math.floor(maxDimension * (video.videoHeight / video.videoWidth));
+        displayCanvas.height = maxDimension;
+      } else {
+        displayCanvas.width = maxDimension;
+        displayCanvas.height = Math.floor(maxDimension * (video.videoHeight / video.videoWidth));
+      }
 
       // Clear both canvases
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -151,8 +160,17 @@ function App() {
         ctx.filter = 'none';
       }
       
-      // Draw and downscale
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Draw and downscale with rotation if needed
+      ctx.save();
+      if (isPortrait) {
+        // Rotate 90 degrees clockwise and translate
+        ctx.translate(canvas.width, 0);
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(video, 0, 0, canvas.height, canvas.width);
+      } else {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+      ctx.restore();
 
       // Apply color quantization if needed
       if (colorCount < 256 && colorTableRef.current) {
@@ -170,9 +188,19 @@ function App() {
         ctx.putImageData(imageData, 0, 0);
       }
 
-      // Upscale with nearest neighbor
+      // Upscale with nearest neighbor and rotation if needed
+      displayCtx.save();
       displayCtx.imageSmoothingEnabled = false;
-      displayCtx.drawImage(canvas, 0, 0, displayCanvas.width, displayCanvas.height);
+      
+      if (isPortrait) {
+        // Rotate -90 degrees to make it upright
+        displayCtx.translate(0, displayCanvas.height);
+        displayCtx.rotate(-Math.PI / 2);
+        displayCtx.drawImage(canvas, 0, 0, displayCanvas.height, displayCanvas.width);
+      } else {
+        displayCtx.drawImage(canvas, 0, 0, displayCanvas.width, displayCanvas.height);
+      }
+      displayCtx.restore();
 
       if (isActive) {
         animationFrameRef.current = requestAnimationFrame(processFrame);
@@ -286,9 +314,17 @@ function App() {
       const finalCtx = finalCanvas.getContext('2d');
       if (!finalCtx) return;
 
-      // Set to 1080p resolution
-      finalCanvas.width = 1920;
-      finalCanvas.height = 1080;
+      // Get dimensions from the processed canvas
+      const isPortrait = canvasRef.current.height > canvasRef.current.width;
+      
+      // Set dimensions to maintain aspect ratio at 1920px on the long edge
+      if (isPortrait) {
+        finalCanvas.height = 1920;
+        finalCanvas.width = Math.round(1920 * (canvasRef.current.width / canvasRef.current.height));
+      } else {
+        finalCanvas.width = 1920;
+        finalCanvas.height = Math.round(1920 * (canvasRef.current.height / canvasRef.current.width));
+      }
 
       // Apply flip if needed
       if (isFlipped) {
