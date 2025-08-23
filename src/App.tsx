@@ -165,9 +165,6 @@ function App() {
       if (hueShift !== 0) {
         filters.push(`hue-rotate(${hueShift}deg)`);
       }
-      if (isInverted) {
-        filters.push('invert(100%)');
-      }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
       
       // Draw and downscale with rotation if needed
@@ -181,6 +178,49 @@ function App() {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
       ctx.restore();
+      
+      // Reset filter to prevent affecting subsequent operations
+      ctx.filter = 'none';
+      
+      // Apply color inversion using pixel manipulation to avoid affecting black areas
+      if (isInverted) {
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+          // Copy current canvas content
+          tempCtx.drawImage(canvas, 0, 0);
+          
+          // Apply invert filter to temp canvas
+          tempCtx.filter = 'invert(100%)';
+          tempCtx.globalCompositeOperation = 'source-atop';
+          tempCtx.drawImage(canvas, 0, 0);
+          tempCtx.filter = 'none';
+          tempCtx.globalCompositeOperation = 'source-over';
+          
+          // Get image data from both canvases
+          const originalData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const filteredData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+          
+          // Replace only non-black pixels
+          for (let i = 0; i < originalData.data.length; i += 4) {
+            const r = originalData.data[i];
+            const g = originalData.data[i + 1];
+            const b = originalData.data[i + 2];
+            
+            // If pixel is not black (with small threshold), use filtered version
+            if (r > 5 || g > 5 || b > 5) {
+              originalData.data[i] = filteredData.data[i];
+              originalData.data[i + 1] = filteredData.data[i + 1];
+              originalData.data[i + 2] = filteredData.data[i + 2];
+            }
+          }
+          
+          // Put the modified data back
+          ctx.putImageData(originalData, 0, 0);
+        }
+      }
 
       // Apply color quantization if reduced colors is enabled
       if (reducedColors && colorTableRef.current) {
@@ -207,6 +247,11 @@ function App() {
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
+          
+          // Skip black pixels (with small threshold) to preserve black areas
+          if (r <= 5 && g <= 5 && b <= 5) {
+            continue;
+          }
           
           // Convert RGB to HSL
           const max = Math.max(r, g, b) / 255;
@@ -386,6 +431,8 @@ function App() {
     document.addEventListener('touchend', cleanup);
   };
 
+
+
   // Handle button hold functionality
   const startUpdatingWidth = (increment: boolean) => {
     const updateValue = () => {
@@ -523,18 +570,18 @@ function App() {
             <label className="effect-control">
               <input
                 type="checkbox"
-                checked={isGrayscale}
-                onChange={(e) => setIsGrayscale(e.target.checked)}
-              />
-              Grayscale
-            </label>
-            <label className="effect-control">
-              <input
-                type="checkbox"
                 checked={isFlipped}
                 onChange={(e) => setIsFlipped(e.target.checked)}
               />
               Flip Horizontal
+            </label>
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isGrayscale}
+                onChange={(e) => setIsGrayscale(e.target.checked)}
+              />
+              Grayscale
             </label>
             <label className="effect-control">
               <input
@@ -547,19 +594,21 @@ function App() {
             <label className="effect-control">
               <input
                 type="checkbox"
-                checked={isInverted}
-                onChange={(e) => setIsInverted(e.target.checked)}
-              />
-              Invert Colors
-            </label>
-            <label className="effect-control">
-              <input
-                type="checkbox"
                 checked={isLuminanceInverted}
                 onChange={(e) => setIsLuminanceInverted(e.target.checked)}
               />
               Invert Luminance
             </label>
+            {!isGrayscale && (
+              <label className="effect-control">
+                <input
+                  type="checkbox"
+                  checked={isInverted}
+                  onChange={(e) => setIsInverted(e.target.checked)}
+                />
+                Invert Colors
+              </label>
+            )}
           </div>
           <div className="resolution-controls">
             <label className="resolution-input">
