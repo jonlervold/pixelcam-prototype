@@ -699,42 +699,99 @@ function App() {
     
     try {
       // =============================================================================
-      // FRAME CAPTURE PHASE - Capture multiple frames over time
+      // FRAME CAPTURE PHASE - Capture multiple frames over time with upscaling
       // =============================================================================
+      
+      // First, analyze the display canvas to find content bounds (same as captureImage)
+      const displayCanvas = displayCanvasRef.current;
+      const displayCtx = displayCanvas.getContext('2d', { willReadFrequently: true });
+      if (!displayCtx) return;
+
+      // Get pixel data to analyze for black bars
+      const analysisImageData = displayCtx.getImageData(0, 0, displayCanvas.width, displayCanvas.height);
+      const analysisData = analysisImageData.data;
+      
+      // Helper function to identify black/empty pixels
+      const isBlackPixel = (r: number, g: number, b: number) => {
+        return r < 10 && g < 10 && b < 10;
+      };
+      
+      // Find content bounds by scanning for non-black pixels
+      let minX = displayCanvas.width, maxX = 0;
+      let minY = displayCanvas.height, maxY = 0;
+      
+      for (let y = 0; y < displayCanvas.height; y++) {
+        for (let x = 0; x < displayCanvas.width; x++) {
+          const i = (y * displayCanvas.width + x) * 4;
+          const r = analysisData[i];
+          const g = analysisData[i + 1];
+          const b = analysisData[i + 2];
+          
+          if (!isBlackPixel(r, g, b)) {
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      }
+      
+      // Calculate crop dimensions
+      const cropX = minX < displayCanvas.width ? minX : 0;
+      const cropY = minY < displayCanvas.height ? minY : 0;
+      const cropWidth = maxX > 0 ? (maxX - minX + 1) : displayCanvas.width;
+      const cropHeight = maxY > 0 ? (maxY - minY + 1) : displayCanvas.height;
+      
+      // Calculate upscaled dimensions - long edge should be 1920px
+      const cropAspectRatio = cropWidth / cropHeight;
+      let finalWidth, finalHeight;
+      
+      if (cropWidth >= cropHeight) {
+        // Landscape or square - width is the long edge
+        finalWidth = 1920;
+        finalHeight = Math.round(1920 / cropAspectRatio);
+      } else {
+        // Portrait - height is the long edge
+        finalHeight = 1920;
+        finalWidth = Math.round(1920 * cropAspectRatio);
+      }
+      
+      console.log(`📹 Starting to capture ${burstFrames} frames...`);
+      console.log(`📐 Crop dimensions: ${cropWidth}x${cropHeight}`);
+      console.log(`📐 Final GIF dimensions: ${finalWidth}x${finalHeight}`);
       
       const frames: ImageData[] = [];
       const frameDelay = 100; // 100ms between frames (10 FPS)
-      const width = displayCanvasRef.current.width;
-      const height = displayCanvasRef.current.height;
       
-      console.log(`📹 Starting to capture ${burstFrames} frames...`);
-      console.log(`📐 Frame dimensions: ${width}x${height}`);
-      
-      // Capture each frame with a delay between them
+      // Capture each frame with proper cropping and upscaling
       for (let i = 0; i < burstFrames; i++) {
         console.log(`📸 Capturing frame ${i + 1}/${burstFrames}...`);
         
-        // Create temporary canvas to apply flip if needed
+        // Create final canvas with upscaled dimensions
         const frameCanvas = document.createElement('canvas');
-        frameCanvas.width = width;
-        frameCanvas.height = height;
+        frameCanvas.width = finalWidth;
+        frameCanvas.height = finalHeight;
         const frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
         
         if (frameCtx) {
-          // Apply horizontal flip if enabled (for final output)
+          // Apply horizontal flip if enabled
           if (isFlipped) {
             frameCtx.scale(-1, 1);
             frameCtx.translate(-frameCanvas.width, 0);
           }
           
-          // Copy current display canvas to frame canvas
-          frameCtx.imageSmoothingEnabled = false;
-          frameCtx.drawImage(displayCanvasRef.current, 0, 0);
+          // Draw cropped and upscaled content
+          frameCtx.imageSmoothingEnabled = false; // Preserve pixel edges
+          frameCtx.drawImage(
+            displayCanvas,
+            cropX, cropY, cropWidth, cropHeight,  // Source: cropped area
+            0, 0, finalWidth, finalHeight  // Destination: upscaled final canvas
+          );
           
           // Extract pixel data for GIF encoding
-          const imageData = frameCtx.getImageData(0, 0, width, height);
+          const imageData = frameCtx.getImageData(0, 0, finalWidth, finalHeight);
           frames.push(imageData);
-          console.log(`✅ Frame ${i + 1} captured`);
+          console.log(`✅ Frame ${i + 1} captured and upscaled`);
         }
         
         // Wait before capturing next frame (except for last frame)
@@ -763,8 +820,8 @@ function App() {
         const palette = quantize(imageData.data, 256);
         const index = applyPalette(imageData.data, palette);
         
-        // Add frame to GIF with timing information
-        gif.writeFrame(index, width, height, {
+        // Add frame to GIF with timing information using upscaled dimensions
+        gif.writeFrame(index, finalWidth, finalHeight, {
           palette,
           delay: frameDelay / 10, // gifenc expects delay in centiseconds (1/100s)
         });
