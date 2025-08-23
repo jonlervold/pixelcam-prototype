@@ -13,7 +13,7 @@ function App() {
     return saved ? JSON.parse(saved) : 150;
   });
   const [videoLoaded, setVideoLoaded] = useState<boolean>(false);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
   const [isGrayscale, setIsGrayscale] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-isGrayscale');
     return saved ? JSON.parse(saved) : false;
@@ -55,8 +55,8 @@ function App() {
     return saved ? JSON.parse(saved) : 10;
   });
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
-  const colorTableRef = useRef<Uint8Array>();
-  const animationFrameRef = useRef<number>();
+  const colorTableRef = useRef<Uint8Array | undefined>(undefined);
+  const animationFrameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     // Get available cameras
@@ -597,8 +597,7 @@ function App() {
         workers: 2,
         quality: 10,
         width: displayCanvasRef.current.width,
-        height: displayCanvasRef.current.height,
-        workerScript: '/node_modules/gif.js/dist/gif.worker.js'
+        height: displayCanvasRef.current.height
       });
       
       // Capture frames
