@@ -14,6 +14,7 @@ function App() {
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [reducedColors, setReducedColors] = useState<boolean>(false);
   const [colorCount, setColorCount] = useState<number>(8);
+  const [hueShift, setHueShift] = useState<number>(0);
   const colorTableRef = useRef<Uint8Array>();
   const animationFrameRef = useRef<number>();
 
@@ -155,11 +156,14 @@ function App() {
       displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
       
       // Apply filters
+      const filters = [];
       if (isGrayscale) {
-        ctx.filter = 'grayscale(100%)';
-      } else {
-        ctx.filter = 'none';
+        filters.push('grayscale(100%)');
       }
+      if (hueShift !== 0) {
+        filters.push(`hue-rotate(${hueShift}deg)`);
+      }
+      ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
       
       // Draw and downscale with rotation if needed
       ctx.save();
@@ -218,7 +222,7 @@ function App() {
         animationFrameRef.current = undefined;
       }
     };
-  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors]);
+  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift]);
 
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
@@ -233,11 +237,50 @@ function App() {
     setColorCount(Number(event.target.value));
   };
 
+  const handleHueShiftChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setHueShift(Number(event.target.value));
+  };
+
   const startUpdatingColors = (increment: boolean) => {
     const updateValue = () => {
       setColorCount(prev => {
         const newValue = increment ? prev + 1 : prev - 1;
         return Math.min(Math.max(newValue, 2), 20);
+      });
+    };
+
+    // First update
+    updateValue();
+
+    // Then start interval after a delay
+    const timeoutId = setTimeout(() => {
+      const intervalId = setInterval(updateValue, 50);
+      
+      const cleanup = () => {
+        clearInterval(intervalId);
+        document.removeEventListener('mouseup', cleanup);
+        document.removeEventListener('touchend', cleanup);
+      };
+
+      document.addEventListener('mouseup', cleanup);
+      document.addEventListener('touchend', cleanup);
+    }, 250);
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mouseup', cleanup);
+      document.removeEventListener('touchend', cleanup);
+    };
+
+    document.addEventListener('mouseup', cleanup);
+    document.addEventListener('touchend', cleanup);
+  };
+
+  const startUpdatingHue = (increment: boolean) => {
+    const updateValue = () => {
+      setHueShift(prev => {
+        const newValue = increment ? prev + 5 : prev - 5;
+        return Math.min(Math.max(newValue, -180), 180);
       });
     };
 
@@ -377,10 +420,7 @@ function App() {
       link.href = finalCanvas.toDataURL('image/png');
       link.click();
       
-      console.log('Exported with crop:', { 
-        original: { width: displayCanvas.width, height: displayCanvas.height },
-        cropped: { width: cropWidth, height: cropHeight, x: cropX, y: cropY }
-      });
+
     } catch (err) {
       console.error('Error saving image:', err);
     }
@@ -408,14 +448,6 @@ function App() {
             <label className="effect-control">
               <input
                 type="checkbox"
-                checked={reducedColors}
-                onChange={(e) => setReducedColors(e.target.checked)}
-              />
-              Use Reduced Colors
-            </label>
-            <label className="effect-control">
-              <input
-                type="checkbox"
                 checked={isGrayscale}
                 onChange={(e) => setIsGrayscale(e.target.checked)}
               />
@@ -428,6 +460,14 @@ function App() {
                 onChange={(e) => setIsFlipped(e.target.checked)}
               />
               Flip Horizontal
+            </label>
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={reducedColors}
+                onChange={(e) => setReducedColors(e.target.checked)}
+              />
+              Use Reduced Colors
             </label>
           </div>
           <div className="resolution-controls">
@@ -490,6 +530,39 @@ function App() {
                 step="1"
                 value={colorCount}
                 onChange={handleColorCountChange}
+                style={{ width: '100%' }}
+              />
+            </div>
+          )}
+          {!isGrayscale && (
+            <div className="resolution-controls">
+              <label className="resolution-input">
+                Hue Shift:
+                <div className="number-control">
+                  <button 
+                    onMouseDown={() => startUpdatingHue(false)}
+                    onTouchStart={() => startUpdatingHue(false)}
+                    disabled={hueShift <= -180}
+                  >
+                    -
+                  </button>
+                  <span>{hueShift}°</span>
+                  <button 
+                    onMouseDown={() => startUpdatingHue(true)}
+                    onTouchStart={() => startUpdatingHue(true)}
+                    disabled={hueShift >= 180}
+                  >
+                    +
+                  </button>
+                </div>
+              </label>
+              <input
+                type="range"
+                min="-180"
+                max="180"
+                step="5"
+                value={hueShift}
+                onChange={handleHueShiftChange}
                 style={{ width: '100%' }}
               />
             </div>
