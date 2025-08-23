@@ -856,16 +856,30 @@ function App() {
       const cropHeight = maxY > 0 ? (maxY - minY + 1) : displayCanvas.height;
       
       // =============================================================================
-      // FINAL IMAGE CREATION - Create cropped final image
+      // FINAL IMAGE CREATION - Create upscaled final image (1920px on long edge)
       // =============================================================================
       
-      // Create final canvas with cropped dimensions
+      // Calculate upscaled dimensions - long edge should be 1920px
+      const cropAspectRatio = cropWidth / cropHeight;
+      let finalWidth, finalHeight;
+      
+      if (cropWidth >= cropHeight) {
+        // Landscape or square - width is the long edge
+        finalWidth = 1920;
+        finalHeight = Math.round(1920 / cropAspectRatio);
+      } else {
+        // Portrait - height is the long edge
+        finalHeight = 1920;
+        finalWidth = Math.round(1920 * cropAspectRatio);
+      }
+      
+      // Create final canvas with upscaled dimensions
       const finalCanvas = document.createElement('canvas');
       const finalCtx = finalCanvas.getContext('2d', { willReadFrequently: true });
       if (!finalCtx) return;
 
-      finalCanvas.width = cropWidth;
-      finalCanvas.height = cropHeight;
+      finalCanvas.width = finalWidth;
+      finalCanvas.height = finalHeight;
 
       // Apply horizontal flip if enabled
       if (isFlipped) {
@@ -873,12 +887,12 @@ function App() {
         finalCtx.translate(-finalCanvas.width, 0);
       }
 
-      // Draw only the content area (cropped) to final canvas
-      finalCtx.imageSmoothingEnabled = false; // Preserve pixel edges
+      // Draw cropped content upscaled to final canvas
+      finalCtx.imageSmoothingEnabled = false; // Preserve pixel edges for crisp upscaling
       finalCtx.drawImage(
         displayCanvas,
         cropX, cropY, cropWidth, cropHeight,  // Source: cropped area from display canvas
-        0, 0, finalCanvas.width, finalCanvas.height  // Destination: full final canvas
+        0, 0, finalWidth, finalHeight  // Destination: upscaled final canvas
       );
 
       // Create and trigger download
