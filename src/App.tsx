@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import GIF from 'gif.js';
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -17,6 +18,9 @@ function App() {
   const [hueShift, setHueShift] = useState<number>(0);
   const [isInverted, setIsInverted] = useState<boolean>(false);
   const [isLuminanceInverted, setIsLuminanceInverted] = useState<boolean>(false);
+  const [isBurstMode, setIsBurstMode] = useState<boolean>(false);
+  const [burstFrames, setBurstFrames] = useState<number>(10);
+  const [isCapturing, setIsCapturing] = useState<boolean>(false);
   const colorTableRef = useRef<Uint8Array>();
   const animationFrameRef = useRef<number>();
 
@@ -431,6 +435,38 @@ function App() {
     document.addEventListener('touchend', cleanup);
   };
 
+  const startUpdatingBurstFrames = (increment: boolean) => {
+    const updateValue = () => {
+      setBurstFrames(prev => {
+        const newValue = increment ? prev + 1 : prev - 1;
+        return Math.min(Math.max(newValue, 3), 30);
+      });
+    };
+
+    updateValue();
+    const timeoutId = setTimeout(() => {
+      const intervalId = setInterval(updateValue, 50);
+      
+      const cleanup = () => {
+        clearInterval(intervalId);
+        document.removeEventListener('mouseup', cleanup);
+        document.removeEventListener('touchend', cleanup);
+      };
+
+      document.addEventListener('mouseup', cleanup);
+      document.addEventListener('touchend', cleanup);
+    }, 250);
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mouseup', cleanup);
+      document.removeEventListener('touchend', cleanup);
+    };
+
+    document.addEventListener('mouseup', cleanup);
+    document.addEventListener('touchend', cleanup);
+  };
+
 
 
   // Handle button hold functionality
@@ -469,6 +505,71 @@ function App() {
 
     document.addEventListener('mouseup', cleanup);
     document.addEventListener('touchend', cleanup);
+  };
+
+  const captureBurstGif = async () => {
+    if (!displayCanvasRef.current || isCapturing) return;
+    
+    setIsCapturing(true);
+    
+    try {
+      // Create GIF encoder
+      const gif = new GIF({
+        workers: 2,
+        quality: 10,
+        width: displayCanvasRef.current.width,
+        height: displayCanvasRef.current.height,
+        workerScript: '/node_modules/gif.js/dist/gif.worker.js'
+      });
+      
+      // Capture frames
+      const capturedFrames: HTMLCanvasElement[] = [];
+      const frameDelay = 100; // 100ms between frames
+      
+      for (let i = 0; i < burstFrames; i++) {
+        // Create a copy of the current frame
+        const frameCanvas = document.createElement('canvas');
+        frameCanvas.width = displayCanvasRef.current.width;
+        frameCanvas.height = displayCanvasRef.current.height;
+        const frameCtx = frameCanvas.getContext('2d');
+        
+        if (frameCtx) {
+          // Apply flip if needed
+          if (isFlipped) {
+            frameCtx.scale(-1, 1);
+            frameCtx.translate(-frameCanvas.width, 0);
+          }
+          
+          frameCtx.imageSmoothingEnabled = false;
+          frameCtx.drawImage(displayCanvasRef.current, 0, 0);
+          
+          // Add frame to GIF
+          gif.addFrame(frameCanvas, { delay: frameDelay });
+          capturedFrames.push(frameCanvas);
+        }
+        
+        // Wait before next frame
+        if (i < burstFrames - 1) {
+          await new Promise(resolve => setTimeout(resolve, frameDelay));
+        }
+      }
+      
+      // Render GIF
+      gif.on('finished', function(blob: Blob) {
+        const link = document.createElement('a');
+        link.download = `pixelcam-burst-${new Date().toISOString()}.gif`;
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        URL.revokeObjectURL(link.href);
+        setIsCapturing(false);
+      });
+      
+      gif.render();
+      
+    } catch (err) {
+      console.error('Error creating burst GIF:', err);
+      setIsCapturing(false);
+    }
   };
 
   const captureImage = () => {
@@ -609,6 +710,14 @@ function App() {
                 Invert Colors
               </label>
             )}
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isBurstMode}
+                onChange={(e) => setIsBurstMode(e.target.checked)}
+              />
+              Burst GIF Mode
+            </label>
           </div>
           <div className="resolution-controls">
             <label className="resolution-input">
@@ -707,6 +816,39 @@ function App() {
               />
             </div>
           )}
+          {isBurstMode && (
+            <div className="resolution-controls">
+              <label className="resolution-input">
+                Burst Frames:
+                <div className="number-control">
+                  <button 
+                    onMouseDown={() => startUpdatingBurstFrames(false)}
+                    onTouchStart={() => startUpdatingBurstFrames(false)}
+                    disabled={burstFrames <= 3}
+                  >
+                    -
+                  </button>
+                  <span>{burstFrames}</span>
+                  <button 
+                    onMouseDown={() => startUpdatingBurstFrames(true)}
+                    onTouchStart={() => startUpdatingBurstFrames(true)}
+                    disabled={burstFrames >= 30}
+                  >
+                    +
+                  </button>
+                </div>
+              </label>
+              <input
+                type="range"
+                min="3"
+                max="30"
+                step="1"
+                value={burstFrames}
+                onChange={(e) => setBurstFrames(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -740,7 +882,8 @@ function App() {
       </div>
 
       <button 
-        onClick={captureImage} 
+        onClick={isBurstMode ? captureBurstGif : captureImage} 
+        disabled={isCapturing}
         style={{ 
           width: '60px',
           height: '60px',
@@ -757,15 +900,16 @@ function App() {
           transform: 'none',
           border: 'none',
           borderRadius: '50%',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          backgroundColor: isCapturing ? 'rgba(255, 0, 0, 0.7)' : (isBurstMode ? 'rgba(0, 150, 0, 0.7)' : 'rgba(0, 0, 0, 0.7)'),
           color: 'white',
-          cursor: 'pointer',
+          cursor: isCapturing ? 'not-allowed' : 'pointer',
           boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
           lineHeight: '1',
-          textAlign: 'center'
+          textAlign: 'center',
+          opacity: isCapturing ? 0.6 : 1
         }}
       >
-        📷
+        {isCapturing ? '⏳' : (isBurstMode ? '🎬' : '📷')}
       </button>
       </div>
   );
