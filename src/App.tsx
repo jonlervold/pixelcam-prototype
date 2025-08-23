@@ -16,6 +16,7 @@ function App() {
   const [colorCount, setColorCount] = useState<number>(8);
   const [hueShift, setHueShift] = useState<number>(0);
   const [isInverted, setIsInverted] = useState<boolean>(false);
+  const [isLuminanceInverted, setIsLuminanceInverted] = useState<boolean>(false);
   const colorTableRef = useRef<Uint8Array>();
   const animationFrameRef = useRef<number>();
 
@@ -197,6 +198,76 @@ function App() {
         ctx.putImageData(imageData, 0, 0);
       }
 
+      // Apply luminance inversion if enabled
+      if (isLuminanceInverted) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // Convert RGB to HSL
+          const max = Math.max(r, g, b) / 255;
+          const min = Math.min(r, g, b) / 255;
+          const diff = max - min;
+          
+          // Calculate lightness
+          let lightness = (max + min) / 2;
+          
+          // Invert only the lightness
+          lightness = 1 - lightness;
+          
+          // Convert back to RGB with inverted lightness
+          let newR, newG, newB;
+          
+          if (diff === 0) {
+            // Grayscale - just invert lightness
+            newR = newG = newB = Math.round(lightness * 255);
+          } else {
+            // Calculate saturation
+            const saturation = lightness > 0.5 ? diff / (2 - max - min) : diff / (max + min);
+            
+            // Calculate hue
+            let hue = 0;
+            if (max === r / 255) {
+              hue = ((g / 255 - b / 255) / diff + (g < b ? 6 : 0)) / 6;
+            } else if (max === g / 255) {
+              hue = ((b / 255 - r / 255) / diff + 2) / 6;
+            } else {
+              hue = ((r / 255 - g / 255) / diff + 4) / 6;
+            }
+            
+            // Convert HSL back to RGB
+            const hue2rgb = (p: number, q: number, t: number) => {
+              if (t < 0) t += 1;
+              if (t > 1) t -= 1;
+              if (t < 1/6) return p + (q - p) * 6 * t;
+              if (t < 1/2) return q;
+              if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+              return p;
+            };
+            
+            if (saturation === 0) {
+              newR = newG = newB = Math.round(lightness * 255);
+            } else {
+              const q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
+              const p = 2 * lightness - q;
+              newR = Math.round(hue2rgb(p, q, hue + 1/3) * 255);
+              newG = Math.round(hue2rgb(p, q, hue) * 255);
+              newB = Math.round(hue2rgb(p, q, hue - 1/3) * 255);
+            }
+          }
+          
+          data[i] = Math.max(0, Math.min(255, newR));
+          data[i + 1] = Math.max(0, Math.min(255, newG));
+          data[i + 2] = Math.max(0, Math.min(255, newB));
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+      }
+
       // Upscale with nearest neighbor and rotation if needed
       displayCtx.save();
       displayCtx.imageSmoothingEnabled = false;
@@ -226,7 +297,7 @@ function App() {
         animationFrameRef.current = undefined;
       }
     };
-  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift, isInverted]);
+  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift, isInverted, isLuminanceInverted]);
 
   const handleCameraChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCamera(event.target.value);
@@ -478,6 +549,14 @@ function App() {
                 type="checkbox"
                 checked={isInverted}
                 onChange={(e) => setIsInverted(e.target.checked)}
+              />
+              Invert Colors
+            </label>
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isLuminanceInverted}
+                onChange={(e) => setIsLuminanceInverted(e.target.checked)}
               />
               Invert Luminance
             </label>
