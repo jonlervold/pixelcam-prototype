@@ -54,6 +54,17 @@ function App() {
     return saved ? JSON.parse(saved) : 8; // Default to 8 colors
   });
   
+  // Saturation adjustment - controls color intensity
+  const [saturation, setSaturation] = useState<number>(() => {
+    const saved = localStorage.getItem('pixelcam-saturation');
+    return saved ? JSON.parse(saved) : 100; // Default to 100% (no change)
+  });
+  
+  const [useSaturation, setUseSaturation] = useState<boolean>(() => {
+    const saved = localStorage.getItem('pixelcam-useSaturation');
+    return saved ? JSON.parse(saved) : false;
+  });
+
   // Hue shifting - rotates colors around the color wheel
   const [hueShift, setHueShift] = useState<number>(() => {
     const saved = localStorage.getItem('pixelcam-hueShift');
@@ -322,6 +333,14 @@ function App() {
   }, [colorCount]);
 
   useEffect(() => {
+    localStorage.setItem('pixelcam-saturation', JSON.stringify(saturation));
+  }, [saturation]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelcam-useSaturation', JSON.stringify(useSaturation));
+  }, [useSaturation]);
+
+  useEffect(() => {
     localStorage.setItem('pixelcam-hueShift', JSON.stringify(hueShift));
   }, [hueShift]);
 
@@ -419,6 +438,9 @@ function App() {
       const filters = [];
       if (isGrayscale) {
         filters.push('grayscale(100%)');
+      }
+      if (useSaturation && saturation !== 100) {
+        filters.push(`saturate(${saturation}%)`);
       }
       if (useHueShift && hueShift !== 0) {
         filters.push(`hue-rotate(${hueShift}deg)`);
@@ -603,7 +625,7 @@ function App() {
         animationFrameRef.current = undefined;
       }
     };
-  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, hueShift, useHueShift, isInverted, isLuminanceInverted]);
+  }, [targetWidth, videoLoaded, isGrayscale, isFlipped, colorCount, reducedColors, saturation, useSaturation, hueShift, useHueShift, isInverted, isLuminanceInverted]);
 
   // =============================================================================
   // EVENT HANDLERS - Simple handlers for form controls
@@ -620,6 +642,10 @@ function App() {
 
   const handleColorCountChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setColorCount(Number(event.target.value));
+  };
+
+  const handleSaturationChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSaturation(Number(event.target.value));
   };
 
   const handleHueShiftChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -661,6 +687,40 @@ function App() {
     }, 250); // Start repeating after 250ms hold
 
     // Cleanup function for the timeout (in case mouse up happens before interval starts)
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mouseup', cleanup);
+      document.removeEventListener('touchend', cleanup);
+    };
+
+    document.addEventListener('mouseup', cleanup);
+    document.addEventListener('touchend', cleanup);
+  };
+
+  const startUpdatingSaturation = (increment: boolean) => {
+    const updateValue = () => {
+      setSaturation(prev => {
+        const newValue = increment ? prev + 5 : prev - 5;
+        return Math.min(Math.max(newValue, 0), 200); // Clamp between 0% and 200%
+      });
+    };
+
+    // Same pattern as other button hold functions
+    updateValue();
+
+    const timeoutId = setTimeout(() => {
+      const intervalId = setInterval(updateValue, 50);
+      
+      const cleanup = () => {
+        clearInterval(intervalId);
+        document.removeEventListener('mouseup', cleanup);
+        document.removeEventListener('touchend', cleanup);
+      };
+
+      document.addEventListener('mouseup', cleanup);
+      document.addEventListener('touchend', cleanup);
+    }, 250);
+
     const cleanup = () => {
       clearTimeout(timeoutId);
       document.removeEventListener('mouseup', cleanup);
@@ -1104,6 +1164,26 @@ function App() {
               Grayscale
             </label>
             
+            {/* Saturation control - hidden when grayscale is enabled */}
+            <div 
+              style={{ 
+                opacity: !isGrayscale ? 1 : 0,
+                maxHeight: !isGrayscale ? '50px' : '0',
+                overflow: 'hidden',
+                transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
+                pointerEvents: !isGrayscale ? 'auto' : 'none'
+              }}
+            >
+              <label className="effect-control">
+                <input
+                  type="checkbox"
+                  checked={useSaturation}
+                  onChange={(e) => setUseSaturation(e.target.checked)}
+                />
+                Use Saturation
+              </label>
+            </div>
+            
             {/* Hue shift control - hidden when grayscale is enabled */}
             <div 
               style={{ 
@@ -1197,6 +1277,52 @@ function App() {
               onChange={handleTargetWidthChange}
               style={{ width: '100%' }}
             />
+          </div>
+          
+          {/* =============================================================================
+              SATURATION CONTROLS - Shown only when saturation is enabled and not grayscale
+              ============================================================================= */}
+          
+          <div 
+            style={{ 
+              opacity: useSaturation && !isGrayscale ? 1 : 0,
+              maxHeight: useSaturation && !isGrayscale ? '100px' : '0',
+              overflow: 'hidden',
+              transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
+              pointerEvents: useSaturation && !isGrayscale ? 'auto' : 'none'
+            }}
+          >
+            <div className="resolution-controls">
+              <label className="resolution-input">
+                Saturation:
+                <div className="number-control">
+                  <button 
+                    onMouseDown={() => startUpdatingSaturation(false)}
+                    onTouchStart={() => startUpdatingSaturation(false)}
+                    disabled={saturation <= 0}
+                  >
+                    -
+                  </button>
+                  <span>{saturation}%</span>
+                  <button 
+                    onMouseDown={() => startUpdatingSaturation(true)}
+                    onTouchStart={() => startUpdatingSaturation(true)}
+                    disabled={saturation >= 200}
+                  >
+                    +
+                  </button>
+                </div>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="200"
+                step="5"
+                value={saturation}
+                onChange={handleSaturationChange}
+                style={{ width: '100%' }}
+              />
+            </div>
           </div>
           
           {/* =============================================================================
