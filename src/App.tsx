@@ -22,6 +22,11 @@ function App() {
   const [videoLoaded, setVideoLoaded] = useState<boolean>(false); // Whether video stream is ready
   
   // Core pixelation setting - determines long edge of final pixelated image
+  // IMPORTANT: Always applies to the LONG EDGE regardless of device orientation
+  // This ensures consistent pixelation quality when phone rotates:
+  // - Landscape (1280×720): targetWidth controls canvas width (1280 is long edge)
+  // - Portrait (720×1280): targetWidth controls canvas height (1280 is long edge)
+  // - Result: Same pixel density and visual quality in both orientations
   // Uses lazy initialization to load from localStorage on first render
   const [targetWidth, setTargetWidth] = useState<number>(() => {
     const saved = localStorage.getItem('pixelcam-targetWidth');
@@ -419,15 +424,27 @@ function App() {
       // =============================================================================
       
       // Processing canvas: Small size for pixelation effect
-      // Apply targetWidth to the long edge for consistent quality across orientations
+      // CRITICAL: Apply targetWidth to the LONG EDGE to solve mobile rotation quality issues
+      // 
+      // Problem: If we always applied targetWidth to canvas.width, then:
+      // - Landscape (1280×720): 150px → 150×84px canvas (good quality)
+      // - Portrait (720×1280): 150px → 150×266px canvas (bad quality, wrong aspect)
+      // 
+      // Solution: Always apply targetWidth to whichever dimension is longer:
+      // - Landscape (1280×720): width=1280 is longer → canvas.width = targetWidth
+      // - Portrait (720×1280): height=1280 is longer → canvas.height = targetWidth
+      // 
+      // Result: Consistent pixelation quality regardless of phone orientation
       const videoAspectRatio = video.videoWidth / video.videoHeight;
       
       if (video.videoWidth >= video.videoHeight) {
-        // Landscape or square - width is the long edge
+        // Landscape or square orientation - width is the long edge
+        // Apply targetWidth to width, calculate height proportionally
         canvas.width = targetWidth;
         canvas.height = Math.floor(targetWidth / videoAspectRatio);
       } else {
-        // Portrait - height is the long edge
+        // Portrait orientation - height is the long edge  
+        // Apply targetWidth to height, calculate width proportionally
         canvas.height = targetWidth;
         canvas.width = Math.floor(targetWidth * videoAspectRatio);
       }
@@ -926,15 +943,19 @@ function App() {
       const cropHeight = maxY > 0 ? (maxY - minY + 1) : displayCanvas.height;
       
       // Calculate upscaled dimensions - long edge should be 1920px
+      // Uses same long-edge logic as canvas sizing for consistency
+      // This ensures captured GIFs maintain the same quality approach as live view
       const cropAspectRatio = cropWidth / cropHeight;
       let finalWidth, finalHeight;
       
       if (cropWidth >= cropHeight) {
         // Landscape or square - width is the long edge
+        // Apply 1920px to width (long edge), calculate height proportionally
         finalWidth = 1920;
         finalHeight = Math.round(1920 / cropAspectRatio);
       } else {
         // Portrait - height is the long edge
+        // Apply 1920px to height (long edge), calculate width proportionally  
         finalHeight = 1920;
         finalWidth = Math.round(1920 * cropAspectRatio);
       }
@@ -1100,15 +1121,19 @@ function App() {
       // =============================================================================
       
       // Calculate upscaled dimensions - long edge should be 1920px
+      // Uses same long-edge logic as canvas sizing for consistency
+      // This ensures captured images maintain the same quality approach as live view
       const cropAspectRatio = cropWidth / cropHeight;
       let finalWidth, finalHeight;
       
       if (cropWidth >= cropHeight) {
         // Landscape or square - width is the long edge
+        // Apply 1920px to width (long edge), calculate height proportionally
         finalWidth = 1920;
         finalHeight = Math.round(1920 / cropAspectRatio);
       } else {
         // Portrait - height is the long edge
+        // Apply 1920px to height (long edge), calculate width proportionally  
         finalHeight = 1920;
         finalWidth = Math.round(1920 * cropAspectRatio);
       }
