@@ -1104,15 +1104,6 @@ function App() {
               Grayscale
             </label>
             
-            <label className="effect-control">
-              <input
-                type="checkbox"
-                checked={reducedColors}
-                onChange={(e) => setReducedColors(e.target.checked)}
-              />
-              Quantize Color Channels
-            </label>
-            
             {/* Hue shift control - hidden when grayscale is enabled */}
             <div 
               style={{ 
@@ -1132,6 +1123,15 @@ function App() {
                 Use Hue Shift
               </label>
             </div>
+            
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={reducedColors}
+                onChange={(e) => setReducedColors(e.target.checked)}
+              />
+              Quantize Color Channels
+            </label>
             
             <label className="effect-control">
               <input
@@ -1200,52 +1200,6 @@ function App() {
           </div>
           
           {/* =============================================================================
-              COLOR COUNT CONTROLS - Shown only when reduced colors is enabled
-              ============================================================================= */}
-          
-          <div 
-            style={{ 
-              opacity: reducedColors ? 1 : 0,
-              maxHeight: reducedColors ? '100px' : '0',
-              overflow: 'hidden',
-              transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
-              pointerEvents: reducedColors ? 'auto' : 'none'
-            }}
-          >
-            <div className="resolution-controls">
-              <label className="resolution-input">
-                Levels Per Color Channel:
-                <div className="number-control">
-                  <button 
-                    onMouseDown={() => startUpdatingColors(false)}
-                    onTouchStart={() => startUpdatingColors(false)}
-                    disabled={colorCount <= 2}
-                  >
-                    -
-                  </button>
-                  <span>{colorCount}</span>
-                  <button 
-                    onMouseDown={() => startUpdatingColors(true)}
-                    onTouchStart={() => startUpdatingColors(true)}
-                    disabled={colorCount >= 20}
-                  >
-                    +
-                  </button>
-                </div>
-              </label>
-              <input
-                type="range"
-                min="2"
-                max="20"
-                step="1"
-                value={colorCount}
-                onChange={handleColorCountChange}
-                style={{ width: '100%' }}
-              />
-            </div>
-          </div>
-          
-          {/* =============================================================================
               HUE SHIFT CONTROLS - Shown only when hue shift is enabled and not grayscale
               ============================================================================= */}
           
@@ -1286,6 +1240,52 @@ function App() {
                 step="5"
                 value={hueShift}
                 onChange={handleHueShiftChange}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+          
+          {/* =============================================================================
+              COLOR COUNT CONTROLS - Shown only when reduced colors is enabled
+              ============================================================================= */}
+          
+          <div 
+            style={{ 
+              opacity: reducedColors ? 1 : 0,
+              maxHeight: reducedColors ? '100px' : '0',
+              overflow: 'hidden',
+              transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
+              pointerEvents: reducedColors ? 'auto' : 'none'
+            }}
+          >
+            <div className="resolution-controls">
+              <label className="resolution-input">
+                Levels Per Color Channel:
+                <div className="number-control">
+                  <button 
+                    onMouseDown={() => startUpdatingColors(false)}
+                    onTouchStart={() => startUpdatingColors(false)}
+                    disabled={colorCount <= 2}
+                  >
+                    -
+                  </button>
+                  <span>{colorCount}</span>
+                  <button 
+                    onMouseDown={() => startUpdatingColors(true)}
+                    onTouchStart={() => startUpdatingColors(true)}
+                    disabled={colorCount >= 20}
+                  >
+                    +
+                  </button>
+                </div>
+              </label>
+              <input
+                type="range"
+                min="2"
+                max="20"
+                step="1"
+                value={colorCount}
+                onChange={handleColorCountChange}
                 style={{ width: '100%' }}
               />
             </div>
