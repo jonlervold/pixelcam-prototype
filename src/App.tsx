@@ -1174,16 +1174,16 @@ function App() {
           </div>
           
           {/* =============================================================================
-              HUE SHIFT CONTROLS - Shown only when hue shift is enabled
+              HUE SHIFT CONTROLS - Shown only when hue shift is enabled and not grayscale
               ============================================================================= */}
           
           <div 
             style={{ 
-              opacity: useHueShift ? 1 : 0,
-              maxHeight: useHueShift ? '100px' : '0',
+              opacity: useHueShift && !isGrayscale ? 1 : 0,
+              maxHeight: useHueShift && !isGrayscale ? '100px' : '0',
               overflow: 'hidden',
               transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
-              pointerEvents: useHueShift ? 'auto' : 'none'
+              pointerEvents: useHueShift && !isGrayscale ? 'auto' : 'none'
             }}
           >
             <div className="resolution-controls">
