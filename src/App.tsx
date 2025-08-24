@@ -188,6 +188,88 @@ function App() {
   }, [selectedCamera]); // Re-run when selectedCamera changes
 
   // =============================================================================
+  // PAGE VISIBILITY MANAGEMENT - Handle camera stream resumption on mobile
+  // =============================================================================
+  
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      console.log('📱 Page visibility changed:', document.hidden ? 'hidden' : 'visible');
+      
+      // Only act when page becomes visible and we have a selected camera
+      if (!document.hidden && selectedCamera && videoRef.current) {
+        console.log('👁️ Page became visible, checking camera stream status...');
+        
+        try {
+          const currentStream = videoRef.current.srcObject as MediaStream | null;
+          let needsRestart = false;
+          
+          if (!currentStream) {
+            console.log('⚠️ No current stream found, needs restart');
+            needsRestart = true;
+          } else {
+            // Check if any video tracks are inactive
+            const videoTracks = currentStream.getVideoTracks();
+            if (videoTracks.length === 0) {
+              console.log('⚠️ No video tracks found, needs restart');
+              needsRestart = true;
+            } else {
+              // Check if all tracks are still live
+              const inactiveTracks = videoTracks.filter(track => track.readyState !== 'live');
+              if (inactiveTracks.length > 0) {
+                console.log(`⚠️ Found ${inactiveTracks.length} inactive track(s), needs restart`);
+                needsRestart = true;
+              } else {
+                console.log('✅ Camera stream is still active, no restart needed');
+              }
+            }
+          }
+          
+          if (needsRestart) {
+            console.log('🔄 Restarting camera stream due to visibility change...');
+            
+            // Clean up any existing stream
+            if (currentStream) {
+              currentStream.getTracks().forEach(track => {
+                console.log(`🛑 Stopping track: ${track.kind}, state: ${track.readyState}`);
+                track.stop();
+              });
+              videoRef.current.srcObject = null;
+            }
+
+            // Request new camera stream with same constraints as startCamera
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                deviceId: { exact: selectedCamera },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              }
+            });
+            
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              setVideoLoaded(false); // Reset video loaded state for new stream
+              console.log('✅ Camera stream restarted successfully');
+            }
+          }
+        } catch (err) {
+          console.error('💥 Error restarting camera stream on visibility change:', err);
+          // Don't throw - let the app continue functioning
+        }
+      }
+    };
+
+    // Add event listener for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    console.log('👂 Added page visibility change listener');
+
+    // Cleanup function
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      console.log('🧹 Removed page visibility change listener');
+    };
+  }, [selectedCamera]); // Re-run when selectedCamera changes
+
+  // =============================================================================
   // COLOR QUANTIZATION OPTIMIZATION - Pre-compute lookup table
   // =============================================================================
   
