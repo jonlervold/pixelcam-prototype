@@ -1028,7 +1028,7 @@ function App() {
                 checked={reducedColors}
                 onChange={(e) => setReducedColors(e.target.checked)}
               />
-              Use Reduced Colors
+              Quantize Color Channels
             </label>
             
             {/* Hue shift control - hidden when grayscale is enabled */}
@@ -1142,7 +1142,7 @@ function App() {
           >
             <div className="resolution-controls">
               <label className="resolution-input">
-                Colors:
+                Levels Per Color Channel:
                 <div className="number-control">
                   <button 
                     onMouseDown={() => startUpdatingColors(false)}
