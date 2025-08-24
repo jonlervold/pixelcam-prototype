@@ -700,7 +700,7 @@ function App() {
   const startUpdatingSaturation = (increment: boolean) => {
     const updateValue = () => {
       setSaturation(prev => {
-        const newValue = increment ? prev + 5 : prev - 5;
+        const newValue = increment ? prev + 1 : prev - 1;
         return Math.min(Math.max(newValue, 0), 200); // Clamp between 0% and 200%
       });
     };
@@ -1317,7 +1317,7 @@ function App() {
                 type="range"
                 min="0"
                 max="200"
-                step="5"
+                step="1"
                 value={saturation}
                 onChange={handleSaturationChange}
                 style={{ width: '100%' }}
