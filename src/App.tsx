@@ -1060,25 +1060,15 @@ function App() {
               Invert Luminance
             </label>
             
-            {/* Color inversion control - hidden when grayscale is enabled */}
-            <div 
-              style={{ 
-                opacity: !isGrayscale ? 1 : 0,
-                maxHeight: !isGrayscale ? '50px' : '0',
-                overflow: 'hidden',
-                transition: 'opacity 0.3s ease-in-out, max-height 0.3s ease-in-out',
-                pointerEvents: !isGrayscale ? 'auto' : 'none'
-              }}
-            >
-              <label className="effect-control">
-                <input
-                  type="checkbox"
-                  checked={isInverted}
-                  onChange={(e) => setIsInverted(e.target.checked)}
-                />
-                Invert Colors
-              </label>
-            </div>
+            {/* Color inversion control - always visible */}
+            <label className="effect-control">
+              <input
+                type="checkbox"
+                checked={isInverted}
+                onChange={(e) => setIsInverted(e.target.checked)}
+              />
+              Invert Colors
+            </label>
             
             <label className="effect-control">
               <input
