@@ -21,11 +21,11 @@ function App() {
   const [selectedCamera, setSelectedCamera] = useState<string>(''); // Currently selected camera ID
   const [videoLoaded, setVideoLoaded] = useState<boolean>(false); // Whether video stream is ready
   
-  // Core pixelation setting - determines width of final pixelated image
+  // Core pixelation setting - determines long edge of final pixelated image
   // Uses lazy initialization to load from localStorage on first render
   const [targetWidth, setTargetWidth] = useState<number>(() => {
     const saved = localStorage.getItem('pixelcam-targetWidth');
-    return saved ? JSON.parse(saved) : 150; // Default to 150px wide
+    return saved ? JSON.parse(saved) : 150; // Default to 150px on long edge
   });
 
   // =============================================================================
@@ -298,13 +298,21 @@ function App() {
       // =============================================================================
       
       // Processing canvas: Small size for pixelation effect
-      // Width is user-controlled, height maintains aspect ratio
-      canvas.width = targetWidth;
-      canvas.height = Math.floor(targetWidth * (video.videoHeight / video.videoWidth));
+      // Apply targetWidth to the long edge for consistent quality across orientations
+      const videoAspectRatio = video.videoWidth / video.videoHeight;
+      
+      if (video.videoWidth >= video.videoHeight) {
+        // Landscape or square - width is the long edge
+        canvas.width = targetWidth;
+        canvas.height = Math.floor(targetWidth / videoAspectRatio);
+      } else {
+        // Portrait - height is the long edge
+        canvas.height = targetWidth;
+        canvas.width = Math.floor(targetWidth * videoAspectRatio);
+      }
 
       // Display canvas: Fits to screen while maintaining aspect ratio
       // This ensures the pixelated image fills the screen properly on all devices
-      const videoAspectRatio = video.videoWidth / video.videoHeight;
       const screenAspectRatio = window.innerWidth / window.innerHeight;
       
       if (videoAspectRatio > screenAspectRatio) {
@@ -1106,7 +1114,7 @@ function App() {
                   +
                 </button>
               </div>
-              wide
+              long edge
             </label>
             {/* Range slider for resolution */}
             <input
