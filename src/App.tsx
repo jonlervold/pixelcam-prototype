@@ -54,12 +54,18 @@ function App() {
     return saved ? JSON.parse(saved) : 8; // Default to 8 colors
   });
   
-  // Saturation adjustment - controls color intensity
+  // Saturation adjustment - controls color intensity/vibrancy
+  // Range: 0% (completely desaturated/grayscale) to 200% (hyper-saturated)
+  // 100% = no change, <100% = less vibrant, >100% = more vibrant
+  // Uses CSS saturate() filter for GPU-accelerated performance
   const [saturation, setSaturation] = useState<number>(() => {
     const saved = localStorage.getItem('pixelcam-saturation');
     return saved ? JSON.parse(saved) : 100; // Default to 100% (no change)
   });
   
+  // Boolean flag to enable/disable saturation adjustment
+  // When false, saturation slider is hidden and effect is not applied
+  // Hidden when grayscale is enabled since they conflict
   const [useSaturation, setUseSaturation] = useState<boolean>(() => {
     const saved = localStorage.getItem('pixelcam-useSaturation');
     return saved ? JSON.parse(saved) : false;
@@ -202,29 +208,38 @@ function App() {
   // PAGE VISIBILITY MANAGEMENT - Handle camera stream resumption on mobile
   // =============================================================================
   
+  // Mobile browsers often suspend camera streams when the page loses focus or device sleeps
+  // This causes the camera to freeze when users return to the app
+  // Solution: Listen for page visibility changes and restart frozen camera streams
   useEffect(() => {
     const handleVisibilityChange = async () => {
       console.log('📱 Page visibility changed:', document.hidden ? 'hidden' : 'visible');
       
-      // Only act when page becomes visible and we have a selected camera
+      // Only act when page becomes visible (not when it becomes hidden)
+      // Also ensure we have a selected camera and video element ready
       if (!document.hidden && selectedCamera && videoRef.current) {
         console.log('👁️ Page became visible, checking camera stream status...');
         
         try {
+          // Get the current MediaStream from the video element
           const currentStream = videoRef.current.srcObject as MediaStream | null;
           let needsRestart = false;
           
+          // Check 1: Does a stream exist at all?
           if (!currentStream) {
             console.log('⚠️ No current stream found, needs restart');
             needsRestart = true;
           } else {
-            // Check if any video tracks are inactive
+            // Check 2: Does the stream have video tracks?
+            // MediaStream can exist but have no active tracks
             const videoTracks = currentStream.getVideoTracks();
             if (videoTracks.length === 0) {
               console.log('⚠️ No video tracks found, needs restart');
               needsRestart = true;
             } else {
-              // Check if all tracks are still live
+              // Check 3: Are all video tracks still in 'live' state?
+              // track.readyState can be: 'live', 'ended', or 'muted'
+              // Mobile browsers often set tracks to 'ended' when suspended
               const inactiveTracks = videoTracks.filter(track => track.readyState !== 'live');
               if (inactiveTracks.length > 0) {
                 console.log(`⚠️ Found ${inactiveTracks.length} inactive track(s), needs restart`);
@@ -235,50 +250,55 @@ function App() {
             }
           }
           
+          // If any checks failed, restart the camera stream
           if (needsRestart) {
             console.log('🔄 Restarting camera stream due to visibility change...');
             
-            // Clean up any existing stream
+            // Step 1: Clean up any existing stream to prevent resource leaks
             if (currentStream) {
               currentStream.getTracks().forEach(track => {
                 console.log(`🛑 Stopping track: ${track.kind}, state: ${track.readyState}`);
-                track.stop();
+                track.stop(); // Release camera resource
               });
-              videoRef.current.srcObject = null;
+              videoRef.current.srcObject = null; // Clear video element source
             }
 
-            // Request new camera stream with same constraints as startCamera
+            // Step 2: Request new camera stream with same constraints as startCamera function
+            // These constraints match the original camera setup for consistency
             const stream = await navigator.mediaDevices.getUserMedia({
               video: {
-                deviceId: { exact: selectedCamera },
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                deviceId: { exact: selectedCamera }, // Use exact same camera
+                width: { ideal: 1280 },             // High resolution for quality
+                height: { ideal: 720 }              // Will be downscaled for pixelation
               }
             });
             
+            // Step 3: Assign new stream to video element and reset state
             if (videoRef.current) {
               videoRef.current.srcObject = stream;
-              setVideoLoaded(false); // Reset video loaded state for new stream
+              setVideoLoaded(false); // Reset video loaded state to trigger re-processing
               console.log('✅ Camera stream restarted successfully');
             }
           }
         } catch (err) {
           console.error('💥 Error restarting camera stream on visibility change:', err);
-          // Don't throw - let the app continue functioning
+          // Don't throw - let the app continue functioning even if restart fails
+          // User can manually switch cameras if needed
         }
       }
     };
 
-    // Add event listener for visibility changes
+    // Register the visibility change listener
+    // This fires when user switches tabs, minimizes browser, locks device, etc.
     document.addEventListener('visibilitychange', handleVisibilityChange);
     console.log('👂 Added page visibility change listener');
 
-    // Cleanup function
+    // Cleanup function - removes event listener when component unmounts or selectedCamera changes
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       console.log('🧹 Removed page visibility change listener');
     };
-  }, [selectedCamera]); // Re-run when selectedCamera changes
+  }, [selectedCamera]); // Re-run when selectedCamera changes to update the listener with new camera ID
 
   // =============================================================================
   // COLOR QUANTIZATION OPTIMIZATION - Pre-compute lookup table
@@ -435,10 +455,13 @@ function App() {
       // =============================================================================
       
       // Build filter string for effects that can be done with CSS filters
+      // These are GPU-accelerated and much faster than pixel-level manipulation
       const filters = [];
       if (isGrayscale) {
         filters.push('grayscale(100%)');
       }
+      // Apply saturation filter only if enabled and not at default 100%
+      // saturate(0%) = completely desaturated, saturate(100%) = normal, saturate(200%) = hyper-saturated
       if (useSaturation && saturation !== 100) {
         filters.push(`saturate(${saturation}%)`);
       }
@@ -644,6 +667,8 @@ function App() {
     setColorCount(Number(event.target.value));
   };
 
+  // Handle saturation slider changes - converts string input to number
+  // Range input values are already constrained by min/max attributes (0-200)
   const handleSaturationChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSaturation(Number(event.target.value));
   };
@@ -697,6 +722,9 @@ function App() {
     document.addEventListener('touchend', cleanup);
   };
 
+  // Handle saturation +/- button hold functionality
+  // Implements "hold to repeat" behavior: immediate update, then delayed continuous updates
+  // increment: true for +1%, false for -1%
   const startUpdatingSaturation = (increment: boolean) => {
     const updateValue = () => {
       setSaturation(prev => {
@@ -705,28 +733,33 @@ function App() {
       });
     };
 
-    // Same pattern as other button hold functions
+    // First update happens immediately when button is pressed
     updateValue();
 
+    // Start repeating updates after 250ms delay (prevents accidental rapid changes)
     const timeoutId = setTimeout(() => {
-      const intervalId = setInterval(updateValue, 50);
+      const intervalId = setInterval(updateValue, 50); // Update every 50ms while holding
       
+      // Cleanup function for the interval - stops repeating when button released
       const cleanup = () => {
         clearInterval(intervalId);
         document.removeEventListener('mouseup', cleanup);
         document.removeEventListener('touchend', cleanup);
       };
 
+      // Listen for mouse/touch release on document to stop repeating
       document.addEventListener('mouseup', cleanup);
       document.addEventListener('touchend', cleanup);
     }, 250);
 
+    // Cleanup function for the timeout (in case mouse up happens before interval starts)
     const cleanup = () => {
       clearTimeout(timeoutId);
       document.removeEventListener('mouseup', cleanup);
       document.removeEventListener('touchend', cleanup);
     };
 
+    // Listen for mouse/touch release to stop the initial timeout
     document.addEventListener('mouseup', cleanup);
     document.addEventListener('touchend', cleanup);
   };
